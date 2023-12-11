@@ -551,12 +551,6 @@ def actuallyDefinedProtocolMethods(protocol: object) -> frozenset[str]:
 
 
 
-"""
-The process of defining a Protocol, or any Python class really, leaves behind
-some extra junk which we cannot consider state-machine input methods.
-"""
-
-
 @dataclass
 class TypicalBuilder(Generic[InputsProto, StateCore, P]):
     """
