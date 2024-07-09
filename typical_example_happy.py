@@ -11,12 +11,12 @@ from automat import TypicalBuilder
 
 
 @dataclass
-class Request(object):
+class Request:
     id: int = field(default_factory=count(1).__next__)
 
 
 @dataclass
-class RequestGetter(object):
+class RequestGetter:
     cb: Callable[[Request], None] | None = None
 
     def startGettingRequests(self, cb: Callable[[Request], None]) -> None:
@@ -24,7 +24,7 @@ class RequestGetter(object):
 
 
 @dataclass(repr=False)
-class Task(object):
+class Task:
     performer: TaskPerformer
     request: Request
     done: Callable[[Task, bool], None]
@@ -46,7 +46,7 @@ class Task(object):
 
 
 @dataclass
-class TaskPerformer(object):
+class TaskPerformer:
     activeTasks: List[Task] = field(default_factory=list)
 
     def performTask(self, r: Request, done: Callable[[Task, bool], None]) -> Task:
@@ -76,7 +76,7 @@ class ConnectionCoordinator(Protocol):
 
 
 @dataclass
-class ConnectionState(object):
+class ConnectionState:
     getter: RequestGetter
     performer: TaskPerformer
     allDone: Callable[[Task], None]
@@ -107,7 +107,7 @@ def cleanup(self: Requested | AtCapacity):
 
 @machine.state()
 @dataclass
-class Initial(object):
+class Initial:
     coord: ConnectionCoordinator
     state: ConnectionState
 
@@ -122,7 +122,7 @@ TASK_LIMIT = 3
 
 @machine.state()
 @dataclass
-class Requested(object):
+class Requested:
     state: ConnectionState
     coord: ConnectionCoordinator
 
@@ -148,7 +148,7 @@ class Requested(object):
 
 @machine.state()
 @dataclass
-class AtCapacity(object):
+class AtCapacity:
     state: ConnectionState
     coord: ConnectionCoordinator
 
@@ -169,7 +169,7 @@ class AtCapacity(object):
 
 @machine.state()
 @dataclass
-class CleaningUp(object):
+class CleaningUp:
     core: ConnectionState
 
     @machine.handle(ConnectionCoordinator.cleanup)
@@ -183,16 +183,20 @@ class CleaningUp(object):
         print("headroom in requested state")
 
 
+Initial.start.enter(Requested)
+
 AtCapacity.requestReceived.enter(AtCapacity)
 AtCapacity.headroom.enter(Requested)
+
 CleaningUp.noop.enter(CleaningUp)
-Initial.start.enter(Requested)
+
 Requested.requestReceived.enter(Requested)
 Requested.atCapacity.enter(AtCapacity)
 
+cleanup.enter(CleaningUp)
+
 
 ConnectionMachine = machine.buildClass()
-cleanup.enter(CleaningUp)
 
 
 def begin(
