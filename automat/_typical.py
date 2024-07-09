@@ -189,9 +189,9 @@ def _getSynthSelf(
 def _stateBuilder(
     inputSignature: Signature,
     factorySignature: Signature,
-    stateFactory: Callable[..., Any],
+    stateFactory: Callable[P, Any],
     suppliers: list[tuple[str, ValueBuilder]] = [],
-):
+) -> StateBuilder:
     wanted = frozenset(factorySignature.parameters)
 
     def _(
@@ -313,7 +313,7 @@ _baseMethods = set(dir(Protocol))
 
 
 def _bindableInputMethod(
-    inputMethod: Callable[..., object],
+    inputMethod: Callable[P, object],
     inputProtocols: frozenset[ProtocolAtRuntime[object]],
     errorState: Callable[..., object],
 ) -> Callable[..., object]:
@@ -324,7 +324,9 @@ def _bindableInputMethod(
     inputMethodName = inputMethod.__name__
 
     @wraps(inputMethod)
-    def method(self: _TypicalInstance[InputsProto, StateCore], *a, **kw) -> object:
+    def method(
+        self: _TypicalInstance[InputsProto, StateCore], *a: P.args, **kw: P.kwargs
+    ) -> object:
         oldStateName = self._transitioner._state
         oldStateObject = self._stateCluster[oldStateName]
         [[outputMethodName], tracer] = self._transitioner.transition(inputMethodName)
@@ -353,10 +355,10 @@ def _bindableInputMethod(
 
 
 def _bindableCommonMethod(
-    inputMethod: Callable[..., object],
-    impl: Callable[..., object],
+    inputMethod: Callable[Concatenate[_TypicalInstance[InputsProto, StateCore], P], object],
+    impl: Callable[Concatenate[_TypicalInstance[InputsProto, StateCore], StateCore, InputsProto, P], object],
     includePrivate: bool,
-) -> Callable[..., object]:
+) -> Callable[Concatenate[_TypicalInstance[InputsProto, StateCore], P], object]:
     """
     Create a bindable method (i.e. "function for use at class scope") to
     implement a I{common behavior} across all states of a given
@@ -368,9 +370,9 @@ def _bindableCommonMethod(
     """
 
     @wraps(inputMethod)
-    def method(self: _TypicalInstance[InputsProto, StateCore], *a, **kw) -> object:
+    def method(self: _TypicalInstance[InputsProto, StateCore], *a: P.args, **kw: P.kwargs) -> object:
         return impl(
-            self, self._stateCore, *([self] if includePrivate else []), *a, **kw
+            self, self._stateCore, *([self] if includePrivate else []), *a, **kw  # type:ignore[arg-type]
         )
 
     return method
@@ -410,7 +412,7 @@ class _TypicalClass(
     _buildCore: Callable[P, StateCore]
     _initialState: Type[UserStateType]
     _automaton: Automaton
-    _realSyntheticType: Type[_TypicalInstance]
+    _realSyntheticType: Type[_TypicalInstance[InputsProto, StateCore]]
     _inputProtocols: frozenset[ProtocolAtRuntime[object]]
     _initialStateBuilder: StateBuilder
 
@@ -453,13 +455,13 @@ class NextStateFactory(Protocol[P, StateCoreContra]):
         ...
 
 
-class Handler(Protocol[InputsProtoInv, SelfCon, ThisInputArgs, R, SelfA, StateCore]):
+class Handler(Protocol[InputsProto, SelfCon, ThisInputArgs, R, SelfA, StateCore]):
     __automat_handler__: tuple[
         Callable[Concatenate[SelfA, ThisInputArgs], R],
-        Optional[AnyArgs[StateCore, ThisInputArgs, InputsProtoInv]],
+        Optional[AnyArgs[StateCore, ThisInputArgs, InputsProto]],
     ]
     enter: Callable[
-        [AnyArgs[StateCore, ThisInputArgs, InputsProtoInv]],
+        [AnyArgs[StateCore, ThisInputArgs, InputsProto]],
         None,
     ]
 
@@ -509,7 +511,9 @@ def _stateOutputs(
     """
     for outputMethodName in dir(stateClass):
         maybeOutputMethod = getattr(stateClass, outputMethodName, None)
-        if maybeOutputMethod is None or not hasattr(maybeOutputMethod, "__automat_handler__"):
+        if maybeOutputMethod is None or not hasattr(
+            maybeOutputMethod, "__automat_handler__"
+        ):
             continue
         outputMethod: AnyHandler = maybeOutputMethod
         [inputMethod, enterParameter] = outputMethod.__automat_handler__
@@ -535,9 +539,13 @@ def _stateOutputs(
 class _SampleProtocol(Protocol):
     pass
 
+
 from inspect import getmembers, isfunction
 
-emptyProtocolMethods = frozenset(name for name, each in getmembers(_SampleProtocol, isfunction))
+emptyProtocolMethods = frozenset(
+    name for name, each in getmembers(_SampleProtocol, isfunction)
+)
+
 
 def actuallyDefinedProtocolMethods(protocol: object) -> frozenset[str]:
     """
@@ -547,8 +555,10 @@ def actuallyDefinedProtocolMethods(protocol: object) -> frozenset[str]:
     that includes locally defined methods and also those defined in inherited
     superclasses.
     """
-    return frozenset(name for name, each in getmembers(protocol, isfunction)) - emptyProtocolMethods
-
+    return (
+        frozenset(name for name, each in getmembers(protocol, isfunction))
+        - emptyProtocolMethods
+    )
 
 
 @dataclass
@@ -631,7 +641,7 @@ class TypicalBuilder(Generic[InputsProto, StateCore, P]):
 
         # common methods are really only supposed to work for the main / public
         # interface, since the only reason to have them is public-facing.
-        commonMethods = {
+        commonMethods: dict[str, Callable[..., object]] = {
             commonMethodName: _bindableCommonMethod(
                 getattr(self._stateProtocol, commonMethodName),
                 commonImpl,
@@ -667,7 +677,7 @@ class TypicalBuilder(Generic[InputsProto, StateCore, P]):
             initialStateBuilder,
         )
 
-    def state(self, *, persist=True, error=False) -> Callable[[Type[T]], Type[T]]:
+    def state(self, *, persist: bool=True, error: bool=False) -> Callable[[Type[T]], Type[T]]:
         """
         Decorate a state class to note that it's a state.
 
