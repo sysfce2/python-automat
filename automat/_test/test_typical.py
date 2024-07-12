@@ -167,7 +167,7 @@ class FirstState(object):
 
     else:
 
-        @builder.handle(SomeInputs.depcheck)
+        @builder.handle(SomeInputs.depcheck, enter=lambda: CoreDataRequirer)
         def from_core(self, count: str) -> str:
             return count
 
@@ -295,10 +295,6 @@ class CoreDataRequirer(object):
     @builder.handle(SomeInputs.back, enter=lambda: FirstState)
     def back(self) -> tuple[object, int]:
         return self, 1234
-
-
-if sys.version_info < (3, 9):
-    FirstState.from_core.enter(CoreDataRequirer)
 
 
 @builder.state(persist=False)
