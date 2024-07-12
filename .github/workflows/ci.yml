@@ -42,3 +42,5 @@ jobs:
       - name: Upload coverage report
         if: ${{ matrix.TOX_ENV != 'mypy' }}
         uses: codecov/codecov-action@v4.5.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
