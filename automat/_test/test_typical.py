@@ -29,6 +29,9 @@ class SomeInputs(Protocol):
     def one(self) -> int:
         "It's the input"
 
+    def reveal_param(self) -> str:
+        "it's the param"
+
     def depcheck(self, count: str) -> str:
         """
         Check populating of dependencies.
@@ -49,6 +52,11 @@ class SomeInputs(Protocol):
     def in_every_state(self, fixture: TestCase) -> int:
         """
         Every state implements this with a default method.
+        """
+
+    def takes_params(self, param1: int, param2: str) -> int:
+        """
+        This takes some parameters.
         """
 
     def next(self) -> tuple[object, int]:
@@ -121,8 +129,8 @@ class StateCore(object):
     count: int = 0
     shared: int = 10
 
+builder: TypicalBuilder[SomeInputs, StateCore, []] = TypicalBuilder(SomeInputs, StateCore)
 
-builder = TypicalBuilder(SomeInputs, StateCore)
 # TODO: right now this must be module-scope because type annotations get
 # evaluated in global scope, but we could capture scopes in .state() and
 # .handle()
@@ -142,6 +150,7 @@ def everystate(
     fixture.assertIsInstance(state_core, StateCore)
     state_core.shared += 1
     return state_core.shared
+
 
 
 @builder.state()
@@ -170,6 +179,10 @@ class FirstState(object):
     def justself(self) -> tuple[object, int]:
         return (self, 0)
 
+    @builder.handle(SomeInputs.takes_params, enter=lambda: CapturesParam2)
+    def takes_params(self, param1: int, param2: str) -> int:
+        return param1
+
     @builder.handle(SomeInputs.ephemeral, enter=lambda: Ephemeral)
     def ephemeral(self) -> None:
         ...
@@ -196,6 +209,15 @@ class FirstState(object):
         Implement the private method.
         """
         return 3333
+@builder.state()
+@dataclass
+class CapturesParam2:
+    core: StateCore
+    param2: str
+
+    @builder.handle(SomeInputs.reveal_param, enter=lambda: CapturesParam2)
+    def reveal_param(self) -> str:
+        return self.param2
 
 
 @builder.common(SomeInputs.use_private, PrivateInputs)
@@ -394,6 +416,14 @@ class TypicalTests(TestCase):
         default = i.valcheck2()
         self.assertEqual(i.valcheck(), 2)
         self.assertEqual(default, 10)
+
+    def test_state_construction_param(self) -> None:
+        """
+        Matching names will be passed through to constructor parameters.
+        """
+        i = C()
+        i.takes_params(1, "a-test-param")
+        self.assertEqual(i.reveal_param(), "a-test-param")
 
     def test_default_implementation(self) -> None:
         """

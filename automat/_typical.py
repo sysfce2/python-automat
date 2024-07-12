@@ -53,12 +53,12 @@ if TYPE_CHECKING or sys.version_info >= (3, 9):
     P = ParamSpec("P")
     ThisInputArgs = ParamSpec("ThisInputArgs")
     AnyArgs = Union[
-        Callable[Concatenate[StateCore, ThisInputArgs], object],
-        Callable[Concatenate[StateCore, InputsProtoInv, ThisInputArgs], object],
-        Callable[[StateCore, InputsProtoInv], object],
-        Callable[[StateCore], object],
-        Callable[[InputsProtoInv], object],
-        Callable[[], object],
+        Callable[Concatenate[StateCore, ThisInputArgs], T],
+        Callable[Concatenate[StateCore, InputsProtoInv, ThisInputArgs], T],
+        Callable[[StateCore, InputsProtoInv], T],
+        Callable[[StateCore], T],
+        Callable[[InputsProtoInv], T],
+        Callable[[], T],
     ]
     whatever = ...
 else:
@@ -128,6 +128,10 @@ class ValueBuilder(Protocol):
 
 
 class StateBuilder(Protocol):
+    """
+    A L{StateBuilder} is a factory function which can create a State object
+    from a collection of inputs.
+    """
     def __call__(
         self,
         syntheticSelf: _TypicalInstance[InputsProto, StateCore],
@@ -136,7 +140,18 @@ class StateBuilder(Protocol):
         args: Tuple[object, ...],
         kwargs: Dict[str, object],
     ) -> object:
-        ...
+        """
+        @param syntheticSelf: The L{_TypicalInstance} that contains the
+            collection of state objects and the state core.
+
+        @param stateCore: The state core for the state machine.
+
+        @param existingStateCluster: pass
+
+        @param args: The arguments passed to the input.
+
+        @param kwargs: The keyword arguments passed to the input.
+        """
 
 
 def _getOtherState(name: str) -> ValueBuilder:
@@ -190,6 +205,8 @@ def _stateBuilder(
     stateFactory: Callable[P, Any],
     suppliers: list[tuple[str, ValueBuilder]] = [],
 ) -> StateBuilder:
+    # the wanted parameters are the parameters requested by the state factory,
+    # which is to say e.g. the dataclass's parameters
     wanted = frozenset(factorySignature.parameters)
 
     def _(
@@ -200,8 +217,12 @@ def _stateBuilder(
         kwargs: Dict[str, object],
     ) -> object:
         boundArgs = inputSignature.bind(*args, **kwargs).arguments
+
+        # we are kicking out the arguments passed to the input method which are
+        # *not* wanted by the underlying state factory.
         for unwanted in frozenset(boundArgs) - wanted:
             del boundArgs[unwanted]
+
         for (extraParamName, extraParamFactory) in suppliers:
             boundArgs[extraParamName] = extraParamFactory(
                 syntheticSelf, stateCore, existingStateCluster
