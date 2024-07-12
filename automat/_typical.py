@@ -242,24 +242,30 @@ def _valueSuppliers(
             notSuppliedByTransitionName
         ]
         parameterType = notSuppliedByTransition.annotation
-        if parameterType.__name__ in stateFactories:
-            yield (
-                (
-                    notSuppliedByTransitionName,
-                    _getOtherState(parameterType.__name__),
-                )
-            )
-        elif parameterType is stateCoreType:
-            yield ((notSuppliedByTransitionName, _getCore))
-        elif parameterType in inputProtocols:
-            yield ((notSuppliedByTransitionName, _getSynthSelf))
-        else:
-            yield (
-                (
-                    notSuppliedByTransitionName,
-                    _getCoreAttribute(notSuppliedByTransitionName),
-                )
-            )
+        yield notSuppliedByTransitionName, _oneValueSupplier(
+            notSuppliedByTransitionName,
+            parameterType,
+            stateFactories,
+            stateCoreType,
+            inputProtocols,
+        )
+
+
+def _oneValueSupplier(
+    notSuppliedByTransitionName: str,
+    parameterType: Any,
+    stateFactories: Dict[str, Callable[..., UserStateType]],
+    stateCoreType: object,
+    inputProtocols: frozenset[ProtocolAtRuntime[object]],
+) -> ValueBuilder:
+    if parameterType.__name__ in stateFactories:
+        return _getOtherState(parameterType.__name__)
+    elif parameterType is stateCoreType:
+        return _getCore
+    elif parameterType in inputProtocols:
+        return _getSynthSelf
+    else:
+        return _getCoreAttribute(notSuppliedByTransitionName)
 
 
 def _buildStateBuilder(
@@ -322,6 +328,7 @@ def _bindableInputMethod(
     implement a I{state machine input} for the given L{_TypicalInstance}.
     """
     inputMethodName = inputMethod.__name__
+    assert inputMethodName != "<lambda>"
 
     @wraps(inputMethod)
     def method(
@@ -355,8 +362,15 @@ def _bindableInputMethod(
 
 
 def _bindableCommonMethod(
-    inputMethod: Callable[Concatenate[_TypicalInstance[InputsProto, StateCore], P], object],
-    impl: Callable[Concatenate[_TypicalInstance[InputsProto, StateCore], StateCore, InputsProto, P], object],
+    inputMethod: Callable[
+        Concatenate[_TypicalInstance[InputsProto, StateCore], P], object
+    ],
+    impl: Callable[
+        Concatenate[
+            _TypicalInstance[InputsProto, StateCore], StateCore, InputsProto, P
+        ],
+        object,
+    ],
     includePrivate: bool,
 ) -> Callable[Concatenate[_TypicalInstance[InputsProto, StateCore], P], object]:
     """
@@ -370,9 +384,19 @@ def _bindableCommonMethod(
     """
 
     @wraps(inputMethod)
-    def method(self: _TypicalInstance[InputsProto, StateCore], *a: P.args, **kw: P.kwargs) -> object:
+    def method(
+        self: _TypicalInstance[InputsProto, StateCore], *a: P.args, **kw: P.kwargs
+    ) -> object:
         return impl(
-            self, self._stateCore, *([self] if includePrivate else []), *a, **kw  # type:ignore[arg-type]
+            self,
+            self._stateCore,
+
+            # TODO: includePrivate needs to be present in an @override that
+            # more correctly describes the 3rd argument to the input impl as
+            # potentially containing a private interface?
+            *([self] if includePrivate else []),  # type:ignore[arg-type]
+            *a,
+            **kw,  # type:ignore[arg-type]
         )
 
     return method
@@ -460,10 +484,6 @@ class Handler(Protocol[InputsProto, SelfCon, ThisInputArgs, R, SelfA, StateCore]
         Callable[Concatenate[SelfA, ThisInputArgs], R],
         Optional[AnyArgs[StateCore, ThisInputArgs, InputsProto]],
     ]
-    enter: Callable[
-        [AnyArgs[StateCore, ThisInputArgs, InputsProto]],
-        None,
-    ]
 
     def __call__(
         notself,
@@ -519,7 +539,11 @@ def _stateOutputs(
         [inputMethod, enterParameter] = outputMethod.__automat_handler__
         newStateFactory: Callable[..., object]
         if enterParameter is not None:
-            newStateFactory = enterParameter
+            # TODO: fix this, not an acceptable test (obv)
+            if enterParameter.__name__ == "<lambda>":
+                newStateFactory = enterParameter()  # type:ignore[assignment,call-arg]
+            else:
+                newStateFactory = enterParameter
         else:
             newStateFactory = stateClass
         if sys.version_info >= (3, 9):
@@ -677,7 +701,9 @@ class TypicalBuilder(Generic[InputsProto, StateCore, P]):
             initialStateBuilder,
         )
 
-    def state(self, *, persist: bool=True, error: bool=False) -> Callable[[Type[T]], Type[T]]:
+    def state(
+        self, *, persist: bool = True, error: bool = False
+    ) -> Callable[[Type[T]], Type[T]]:
         """
         Decorate a state class to note that it's a state.
 
@@ -713,11 +739,6 @@ class TypicalBuilder(Generic[InputsProto, StateCore, P]):
             result: Handler[InputsProto, SelfB, ThisInputArgs, R, SelfA, StateCore]
             result = c  # type:ignore[assignment]
             result.__automat_handler__ = (input, enter)
-
-            def doSetEnter(new: AnyArgs[StateCore, ThisInputArgs, InputsProto]) -> None:
-                result.__automat_handler__ = (input, new)
-
-            result.enter = doSetEnter
             return result
 
         return decorator
