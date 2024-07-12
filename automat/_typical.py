@@ -59,7 +59,6 @@ if TYPE_CHECKING or sys.version_info >= (3, 9):
         Callable[[StateCore], object],
         Callable[[InputsProtoInv], object],
         Callable[[], object],
-        None,
     ]
     whatever = ...
 else:
@@ -480,7 +479,7 @@ class NextStateFactory(Protocol[P, StateCoreContra]):
 class Handler(Protocol[InputsProto, SelfCon, ThisInputArgs, R, SelfA, StateCore]):
     __automat_handler__: tuple[
         Callable[Concatenate[SelfA, ThisInputArgs], R],
-        Optional[AnyArgs[StateCore, ThisInputArgs, InputsProto]],
+        Optional[Callable[[], AnyArgs[StateCore, ThisInputArgs, InputsProto]]],
     ]
 
     def __call__(
@@ -535,15 +534,7 @@ def _stateOutputs(
             continue
         outputMethod: AnyHandler = maybeOutputMethod
         [inputMethod, enterParameter] = outputMethod.__automat_handler__
-        newStateFactory: Callable[..., object]
-        if enterParameter is not None:
-            # TODO: fix this, not an acceptable test (obv)
-            if enterParameter.__name__ == "<lambda>":
-                newStateFactory = enterParameter()  # type:ignore[assignment,call-arg]
-            else:
-                newStateFactory = enterParameter
-        else:
-            newStateFactory = stateClass
+        newStateFactory = enterParameter() if enterParameter is not None else stateClass
         if sys.version_info >= (3, 9):
             for enterAnnotation in (
                 each
@@ -555,7 +546,12 @@ def _stateOutputs(
                 if isinstance(each, Enter)
             ):
                 newStateFactory = enterAnnotation.state
-        yield outputMethodName, inputMethod.__name__, newStateFactory.__name__, newStateFactory
+        yield (
+            outputMethodName,
+            inputMethod.__name__,
+            newStateFactory.__name__,
+            newStateFactory,
+        )
 
 
 class _SampleProtocol(Protocol):
@@ -722,7 +718,9 @@ class TypicalBuilder(Generic[InputsProto, StateCore, P]):
     def handle(
         self,
         input: Callable[Concatenate[SelfA, ThisInputArgs], R],
-        enter: Optional[AnyArgs[StateCore, ThisInputArgs, InputsProto]] = None,
+        enter: Optional[
+            Callable[[], AnyArgs[StateCore, ThisInputArgs, InputsProto]]
+        ] = None,
     ) -> Callable[
         [Callable[Concatenate[SelfB, ThisInputArgs], R]],
         Handler[InputsProto, SelfB, ThisInputArgs, R, SelfA, StateCore],
