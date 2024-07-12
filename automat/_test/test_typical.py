@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 import sys
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -11,9 +10,7 @@ class ModuleEmpty(Protocol):
 
 if sys.version_info >= (3, 9):
     from typing import Annotated
-
 from unittest import TestCase
-
 from .._typical import TypicalBuilder
 from automat import Enter
 
@@ -129,8 +126,6 @@ builder = TypicalBuilder(SomeInputs, StateCore)
 # TODO: right now this must be module-scope because type annotations get
 # evaluated in global scope, but we could capture scopes in .state() and
 # .handle()
-
-
 @builder.common(SomeInputs.in_every_state)
 def everystate(
     public_interface: SomeInputs, state_core: StateCore, fixture: TestCase
@@ -219,7 +214,6 @@ class RequiresSpecial(object):
     # can't get any of these to type-check because we can require any previous
     # state.  maybe that's a mistake?  if you want to know about something,
     # scribble it on the state core?
-
     def read_special(self) -> SomethingSpecial:
         return self.something
 
@@ -383,9 +377,7 @@ class TypicalTests(TestCase):
         """
         Simplest test of all available classes.
         """
-
         i = C()
-
         self.assertEqual(i.one(), 1)
         self.assertEqual(i.one(), 2)
 
