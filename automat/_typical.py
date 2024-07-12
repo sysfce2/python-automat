@@ -47,7 +47,7 @@ T = TypeVar("T")
 OutputCallable = TypeVar("OutputCallable", bound=Callable[..., Any])
 
 
-if TYPE_CHECKING:
+if TYPE_CHECKING or sys.version_info >= (3, 9):
     from typing import Concatenate, ParamSpec
 
     P = ParamSpec("P")
@@ -63,18 +63,17 @@ if TYPE_CHECKING:
     ]
     whatever = ...
 else:
-    # really just for lower python versions but it's simpler to just have it be
-    # always at runtime
     P = TypeVar("P")
     ThisInputArgs = TypeVar("ThisInputArgs")
     AnyArgs = object
     whatever = object
 
     class Concatenater:
-        def __getitem__(self, *a):
-            return list(a)
+        def __getitem__(self, key: object) -> object:
+            return None
 
     Concatenate = Concatenater()
+    Concatenate[None]  # coverage
 
 
 @dataclass
@@ -390,7 +389,6 @@ def _bindableCommonMethod(
         return impl(
             self,
             self._stateCore,
-
             # TODO: includePrivate needs to be present in an @override that
             # more correctly describes the 3rd argument to the input impl as
             # potentially containing a private interface?
