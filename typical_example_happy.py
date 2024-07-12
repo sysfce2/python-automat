@@ -48,6 +48,7 @@ class Task:
 @dataclass
 class TaskPerformer:
     activeTasks: List[Task] = field(default_factory=list)
+    taskLimit: int = 3
 
     def performTask(self, r: Request, done: Callable[[Task, bool], None]) -> Task:
         self.activeTasks.append(it := Task(self, r, done))
@@ -117,9 +118,6 @@ class Initial:
         self.state.getter.startGettingRequests(self.coord.requestReceived)
 
 
-TASK_LIMIT = 3
-
-
 @machine.state()
 @dataclass
 class Requested:
@@ -130,7 +128,7 @@ class Requested:
     def requestReceived(self, r: Request) -> None:
         print("immediately handling request", r)
         self.state.performer.performTask(r, self.coord.taskComplete)
-        if len(self.state.performer.activeTasks) >= TASK_LIMIT:
+        if len(self.state.performer.activeTasks) >= self.state.performer.taskLimit:
             self.coord.atCapacity()
 
     @machine.handle(ConnectionCoordinator.atCapacity)
@@ -207,32 +205,34 @@ def begin(
     return machine
 
 
-#
+def story() -> None:
 
-rget = RequestGetter()
-tper = TaskPerformer()
+    rget = RequestGetter()
+    tper = TaskPerformer()
+
+    def yay(t: Task) -> None:
+        print("yay")
+
+    m = begin(rget, tper, yay)
+    cb = rget.cb
+    assert cb is not None
+    cb(Request())
+    cb(Request())
+    cb(Request())
+    cb(Request())
+    cb(Request())
+    cb(Request())
+    cb(Request())
+    print([each for each in tper.activeTasks])
+    sc: ConnectionState = m._stateCore  # type:ignore
+    print(sc.queue)
+    tper.activeTasks[0].complete(False)
+    tper.activeTasks[0].complete(False)
+    print([each for each in tper.activeTasks])
+    print(sc.queue)
+    tper.activeTasks[0].complete(True)
+    print([each for each in tper.activeTasks])
 
 
-def yay(t: Task) -> None:
-    print("yay")
-
-
-m = begin(rget, tper, yay)
-cb = rget.cb
-assert cb is not None
-cb(Request())
-cb(Request())
-cb(Request())
-cb(Request())
-cb(Request())
-cb(Request())
-cb(Request())
-print([each for each in tper.activeTasks])
-sc: ConnectionState = m._stateCore  # type:ignore
-print(sc.queue)
-tper.activeTasks[0].complete(False)
-tper.activeTasks[0].complete(False)
-print([each for each in tper.activeTasks])
-print(sc.queue)
-tper.activeTasks[0].complete(True)
-print([each for each in tper.activeTasks])
+if __name__ == "__main__":
+    story()
