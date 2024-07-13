@@ -8,8 +8,11 @@ class ModuleEmpty(Protocol):
     pass
 
 
-if sys.version_info >= (3, 9):
+if sys.version_info >= (3, 10):
     from typing import Annotated
+else:
+    from typing_extensions import Annotated
+
 from unittest import TestCase
 from .._typical import TypicalBuilder
 from automat import Enter
@@ -165,17 +168,10 @@ class FirstState(object):
         self.core.count += 1
         return self.core.count
 
-    if sys.version_info >= (3, 9):
-        # Use Annotated when we can
-        @builder.handle(SomeInputs.depcheck)
-        def from_core(self, count: str) -> Annotated[str, Enter(CoreDataRequirer)]:
-            return count
-
-    else:
-
-        @builder.handle(SomeInputs.depcheck, enter=lambda: CoreDataRequirer)
-        def from_core(self, count: str) -> str:
-            return count
+    # Use Annotated when we can
+    @builder.handle(SomeInputs.depcheck)
+    def from_core(self, count: str) -> Annotated[str, Enter(CoreDataRequirer)]:
+        return count
 
     @builder.handle(SomeInputs.next, enter=lambda: RequiresFirstState1)
     def justself(self) -> tuple[object, int]:

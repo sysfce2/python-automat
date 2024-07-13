@@ -47,7 +47,7 @@ T = TypeVar("T")
 OutputCallable = TypeVar("OutputCallable", bound=Callable[..., Any])
 
 
-if sys.version_info > (3, 9):
+if sys.version_info >= (3, 10):
     from typing import Concatenate, ParamSpec
 else:
     from typing_extensions import Concatenate, ParamSpec
@@ -626,17 +626,16 @@ def _stateOutputs(
         else:
             newStateFactory = stateClass  # type:ignore[assignment]
 
-        if sys.version_info >= (3, 9):
-            for enterAnnotation in (
-                each
-                for each in getattr(
-                    get_type_hints(outputMethod, include_extras=True).get("return"),
-                    "__metadata__",
-                    (),
-                )
-                if isinstance(each, Enter)
-            ):
-                newStateFactory = enterAnnotation.state
+        for enterAnnotation in (
+            each
+            for each in getattr(
+                get_type_hints(outputMethod, include_extras=True).get("return"),
+                "__metadata__",
+                (),
+            )
+            if isinstance(each, Enter)
+        ):
+            newStateFactory = enterAnnotation.state
         newStateName: str = newStateFactory.__name__
         yield (
             outputMethodName,
