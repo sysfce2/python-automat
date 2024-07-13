@@ -280,9 +280,6 @@ def _buildParameterBuilders(
     factoryNeeds = set(stateFactorySignature.parameters)
     transitionSupplies = set(transitionSignature.parameters)
     notSuppliedParams = factoryNeeds - transitionSupplies
-
-    print("NSP", stateFactorySignature, notSuppliedParams)
-
     for maybeTypeMismatch in factoryNeeds & transitionSupplies:
         fromTransition = transitionSignature.parameters[maybeTypeMismatch].annotation
         fromFactory = stateFactorySignature.parameters[maybeTypeMismatch].annotation
@@ -291,9 +288,6 @@ def _buildParameterBuilders(
                 maybeTypeMismatch
             ].default
             if fromFactoryDefault == Parameter.empty:
-                print(
-                    "type mismatch!~", maybeTypeMismatch, fromTransition, fromFactory, fromFactoryDefault
-                )
                 notSuppliedParams.add(maybeTypeMismatch)
 
     for nameForParameterNotSuppliedByTransitionInputs in notSuppliedParams:
@@ -323,7 +317,6 @@ def _oneParameterBuilder(
 
     @see: L{_buildParameterBuilders}
     """
-    print("oneParam:", nameForParameterNotSuppliedByTransitionInputs, parameterType)
     if parameterType.__name__ in stateFactories:
         # If the class name of the parameter's type exactly matches the name of
         # another state type within this state machine, return the
@@ -331,12 +324,10 @@ def _oneParameterBuilder(
 
         # FIXME: this check is too loose, and checks only the class's direct
         # name, not its module or anything else.
-        print(".otherState")
         return _getOtherState(parameterType.__name__)
     elif parameterType is stateCoreType:
         # If the parameter type is the state core type, pass the state core
         # along directly.
-        print(".getCore")
         return _getCore
     elif parameterType in inputProtocols:
         # If the parameter type is exactly one of the input Protocols (whether
@@ -344,7 +335,6 @@ def _oneParameterBuilder(
         # the private ones passed to L{TypicalBuilder._privateProtocols}), pass
         # the 'synthetic self' built internally which conforms to all the input protocols at
         # once.
-        print(".syntheticSelf")
         return _getSynthSelf
     else:
         # If the name of the parameter exaclty matches one of the attributes on
@@ -352,8 +342,11 @@ def _oneParameterBuilder(
 
         # FIXME: this is probably just too much magic at a distance, you can
         # just as easily ask for the state core itself and access its
-        # attributes.  Also, you can't take a default parameter.
-        print(".coreAttribute")
+        # attributes.  Also, you can't take a default parameter, since it will
+        # be clobbered by the exception that comes along with attempting to get
+        # the attribute from the core, even though a default was supplied; the
+        # Parameter.empty check is supposed to catch that, but it doesn't for
+        # dataclasses, it seems.
         return _getCoreAttribute(nameForParameterNotSuppliedByTransitionInputs)
 
 
@@ -427,16 +420,12 @@ def _bindableInputMethod(
         self: _TypicalInstance[InputsProto, StateCore], *a: P.args, **kw: P.kwargs
     ) -> object:
         oldStateName = self._transitioner._state
-        print(f"IMN!{oldStateName}.{inputMethodName}")
         oldStateObject = self._stateCluster[oldStateName]
         [[outputMethodName], tracer] = self._transitioner.transition(inputMethodName)
         newStateName = self._transitioner._state
-        print(f"TT!{newStateName}")
         # here we need to invoke the output method
-        print(f"M: {oldStateName} {inputMethodName} ({outputMethodName})")
         if outputMethodName is None:
             self._stateCluster[newStateName] = errorState()
-            print(f"Unhandled {inputMethodName}")
             raise RuntimeError(
                 f"unhandled: state:{oldStateName} input:{inputMethodName}"
             )
@@ -444,32 +433,17 @@ def _bindableInputMethod(
         stateBuilder: StateBuilder = realMethod.__stateBuilder__
         stateEnter = None
         if newStateName not in self._stateCluster:
-            print(f"Building {newStateName}")
-            try:
-                newBuilt = stateBuilder(
-                    self, self._stateCore, self._stateCluster, a, kw
-                )
-            except:
-                import traceback
-
-                traceback.print_exc()
-                raise
-            print(f"Storing {newStateName}")
+            newBuilt = stateBuilder(self, self._stateCore, self._stateCluster, a, kw)
             self._stateCluster[newStateName] = newBuilt
             stateEnter = getattr(newBuilt, "__automat_post_enter__", None)
-        if (
-            newStateName != oldStateName
-            and not oldStateObject.__persistState__  # type:ignore[attr-defined]
-        ):
-            print(f"Clearing ephemeral {oldStateName}")
+        shouldStatePersist = (
+            oldStateObject.__persistState__# type:ignore[attr-defined]
+        )
+        if newStateName != oldStateName and not shouldStatePersist:
             del self._stateCluster[oldStateName]
         if stateEnter is not None:
-            print("doing special state enter hook", stateEnter.__self__.__class__.__name__)
             stateEnter()
-            print("did special state enter hook", stateEnter.__self__.__class__.__name__)
-        print(f"invoking {realMethod}")
         result = realMethod(*a, **kw)
-        print(f"Done {inputMethodName}")
         return result
 
     return method
