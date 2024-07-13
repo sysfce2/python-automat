@@ -227,7 +227,7 @@ class MethodicalInput(object):
     automaton = attr.ib(repr=False)
     method = attr.ib(validator=assertNoCode)
     symbol = attr.ib(repr=False)
-    collectors = attr.ib(default=attr.Factory(dict), repr=False)
+    collectors: dict[object, object] = attr.ib(default=attr.Factory(dict), repr=False)
     argSpec = attr.ib(init=False, repr=False)
 
     @argSpec.default

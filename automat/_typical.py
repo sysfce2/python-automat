@@ -47,46 +47,27 @@ T = TypeVar("T")
 OutputCallable = TypeVar("OutputCallable", bound=Callable[..., Any])
 
 
-if TYPE_CHECKING or sys.version_info >= (3, 9):
+if sys.version_info > (3, 9):
     from typing import Concatenate, ParamSpec
-
-    P = ParamSpec("P")
-    ThisInputArgs = ParamSpec("ThisInputArgs")
-    FlexibleStateFactory = Union[
-        # StateCore, InputsProtoInv, ThisInputArgs, T
-        Callable[Concatenate[StateCore, InputsProtoInv, ThisInputArgs], T],
-        Callable[Concatenate[StateCore, ThisInputArgs], T],
-        Callable[[StateCore, InputsProtoInv], T],
-        Callable[[StateCore], T],
-        Callable[[InputsProtoInv], T],
-        Callable[[], T],
-    ]
-    EnterMethod = Optional[
-        Callable[[], FlexibleStateFactory[StateCore, InputsProtoInv, ThisInputArgs, T]]
-    ]
-    whatever = ...
 else:
-    P = TypeVar("P")
-    ThisInputArgs = TypeVar("ThisInputArgs")
-    whatever = object
-
-    class EmptyGetItem:
-        def __getitem__(self, key: object) -> object:
-            return None
-
-    FlexibleStateFactory = EmptyGetItem()
-    EnterMethod = EmptyGetItem()
-    Concatenate = EmptyGetItem()
-    Concatenate[None]  # coverage
+    from typing_extensions import Concatenate, ParamSpec
+P = ParamSpec("P")
+ThisInputArgs = ParamSpec("ThisInputArgs")
+FlexibleStateFactory = Union[
+    # There are unfortunately too many different ways to specify the state
+    # factory.
+    Callable[..., T],
+]
+EnterMethod = Optional[Callable[[], FlexibleStateFactory[T]]]
 
 
 @dataclass
-class Enter:
+class Enter(Generic[T]):
     """
     Type annotation instruction to enter the next state.
     """
 
-    state: Type[object]
+    state: type[T]
 
 
 class ProtocolAtRuntime(Protocol[InputsProto]):
@@ -437,7 +418,7 @@ def _bindableInputMethod(
             self._stateCluster[newStateName] = newBuilt
             stateEnter = getattr(newBuilt, "__automat_post_enter__", None)
         shouldStatePersist = (
-            oldStateObject.__persistState__# type:ignore[attr-defined]
+            oldStateObject.__persistState__  # type:ignore[attr-defined]
         )
         if newStateName != oldStateName and not shouldStatePersist:
             del self._stateCluster[oldStateName]
@@ -568,8 +549,6 @@ class NextStateFactory(Protocol[P, StateCoreContra]):
 
 class Handler(
     Protocol[
-        # The State Core passed through to the state-builder method.
-        StateCore,
         # The inputs protocol.
         InputsProto,
         # The 'self' passed to the input method; i.e. the state-specific class.
@@ -582,8 +561,8 @@ class Handler(
         SelfB,
     ]
 ):
-    __automat_input__: Callable[Concatenate[SelfCon, ThisInputArgs], R]
-    __automat_buildState__: EnterMethod[StateCore, InputsProto, ThisInputArgs, SelfB]
+    __automat_input__: Callable[Concatenate[InputsProto, ThisInputArgs], R]
+    __automat_buildState__: EnterMethod[SelfB]
 
     def __call__(
         # We are defining a method that goes on a class, so the "self" is the
@@ -607,15 +586,15 @@ class Handler(
         ...
 
 
-AnyHandler = Handler[Any, Any, Any, Any, Any, Any]
+AnyHandler = Handler[Any, Any, Any, Any, Any]
 
 
 def _stateOutputs(
-    stateClass: type[object],
-) -> Iterable[tuple[str, str, str, Callable[..., object]]]:
+    stateClass: type[SelfA],
+) -> Iterable[tuple[str, str, str, FlexibleStateFactory[object]]]:
     """
     Extract all input-handling methods from a given state class, returning a
-    3-tuple of:
+    4-tuple of:
 
         1. the name of the I{output method} from the state class; i.e. the
            method that has actually been defined here.
@@ -627,6 +606,8 @@ def _stateOutputs(
            L{_TypicalClass._stateBuilders}) to invoke, in order to build the
            state to transition to after the aforementioned state-machine input
            has been handled by the aforementioned state output method.
+
+        4. a L{FlexibleStateFactory} that can construct a state.
     """
     for outputMethodName in dir(stateClass):
         maybeOutputMethod = getattr(stateClass, outputMethodName, None)
@@ -635,11 +616,16 @@ def _stateOutputs(
         ):
             continue
 
-        outputMethod: AnyHandler = maybeOutputMethod
+        outputMethod: Handler[Any, SelfA, Any, Any, object] = maybeOutputMethod
         inputMethod = outputMethod.__automat_input__
         enterParameter = outputMethod.__automat_buildState__
 
-        newStateFactory = enterParameter() if enterParameter is not None else stateClass
+        newStateFactory: FlexibleStateFactory[object]
+        if enterParameter is not None:
+            newStateFactory = enterParameter()
+        else:
+            newStateFactory = stateClass  # type:ignore[assignment]
+
         if sys.version_info >= (3, 9):
             for enterAnnotation in (
                 each
@@ -651,10 +637,11 @@ def _stateOutputs(
                 if isinstance(each, Enter)
             ):
                 newStateFactory = enterAnnotation.state
+        newStateName: str = newStateFactory.__name__
         yield (
             outputMethodName,
             inputMethod.__name__,
-            newStateFactory.__name__,
+            newStateName,
             newStateFactory,
         )
 
@@ -800,9 +787,7 @@ class TypicalBuilder(Generic[InputsProto, StateCore, P]):
             initialStateBuilder,
         )
 
-    def state(
-        self, *, persist: bool = True, error: bool = False
-    ) -> Callable[[Type[T]], Type[T]]:
+    def state(self, *, persist: bool = True, error: bool = False) -> Callable[[type[T]], type[T]]:
         """
         Decorate a state class to note that it's a state.
 
@@ -822,11 +807,11 @@ class TypicalBuilder(Generic[InputsProto, StateCore, P]):
 
     def handle(
         self,
-        input: Callable[Concatenate[SelfA, ThisInputArgs], R],
-        enter: EnterMethod[StateCore, InputsProtoInv, ThisInputArgs, SelfB] = None,
+        input: Callable[Concatenate[InputsProtoInv, ThisInputArgs], R],
+        enter: EnterMethod[SelfB] = None,
     ) -> Callable[
-        [Callable[Concatenate[InputsProto, ThisInputArgs], R]],
-        Handler[StateCore, InputsProtoInv, SelfA, ThisInputArgs, R, SelfB],
+        [Callable[Concatenate[SelfA, ThisInputArgs], R]],
+        Handler[InputsProtoInv, SelfA, ThisInputArgs, R, SelfB],
     ]:
         """
         Define an input handler.
@@ -834,10 +819,10 @@ class TypicalBuilder(Generic[InputsProto, StateCore, P]):
 
         def decorator(
             c: OutputCallable,
-        ) -> Handler[StateCore, InputsProtoInv, SelfA, ThisInputArgs, R, SelfB]:
-            result: Handler[StateCore, InputsProtoInv, SelfA, ThisInputArgs, R, SelfB]
+        ) -> Handler[InputsProtoInv, SelfA, ThisInputArgs, R, SelfB]:
+            result: Handler[InputsProtoInv, SelfA, ThisInputArgs, R, SelfB]
             result = c  # type:ignore[assignment]
-            other: Callable[Concatenate[SelfA, ThisInputArgs], R] = input
+            other: Callable[Concatenate[InputsProtoInv, ThisInputArgs], R] = input
             result.__automat_input__ = other
             result.__automat_buildState__ = enter
             return result
