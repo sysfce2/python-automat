@@ -35,7 +35,7 @@ jobs:
           echo "Starting: ${TOX_ENV} ${PUSH_DOCS}"
           if [[ -n "${TOX_ENV}" ]]; then
             tox -e "$TOX_ENV";
-            if [[ "${{ matrix.TOX_ENV }}" != "mypy" ]]; then
+            if [[ "${{ matrix.TOX_ENV }}" != "mypy" && "${{ matrix.TOX_ENV }}" != "lint" ]]; then
               tox -e coverage-report;
             fi;
           fi;
