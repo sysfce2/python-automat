@@ -24,7 +24,6 @@ from typing import (
     Type,
     TypeVar,
     Union,
-    get_type_hints,
     overload,
 )
 
@@ -48,9 +47,10 @@ OutputCallable = TypeVar("OutputCallable", bound=Callable[..., Any])
 
 
 if sys.version_info >= (3, 10):
-    from typing import Concatenate, ParamSpec
+    from typing import Concatenate, ParamSpec, get_type_hints
+
 else:
-    from typing_extensions import Concatenate, ParamSpec
+    from typing_extensions import Concatenate, ParamSpec, get_type_hints
 P = ParamSpec("P")
 ThisInputArgs = ParamSpec("ThisInputArgs")
 FlexibleStateFactory = Union[
