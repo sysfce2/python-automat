@@ -33,12 +33,12 @@ from ._core import Automaton, Transitioner
 SelfCon = TypeVar("SelfCon", contravariant=True)
 InputsProtoInv = TypeVar("InputsProtoInv")
 InputsProtoCon = TypeVar("InputsProtoCon", contravariant=True)
-StateCoreCo = TypeVar("StateCoreCo", covariant=True)
-StateCoreCon = TypeVar("StateCoreCon", contravariant=True)
+SharedCoreCo = TypeVar("SharedCoreCo", covariant=True)
+SharedCoreCon = TypeVar("SharedCoreCon", contravariant=True)
 InputsProto = TypeVar("InputsProto", covariant=True)
 PrivateProto = TypeVar("PrivateProto", covariant=True)
 UserStateType = object
-StateCore = TypeVar("StateCore")
+SharedCore = TypeVar("SharedCore")
 OutputResult = TypeVar("OutputResult")
 SelfA = TypeVar("SelfA")
 SelfB = TypeVar("SelfB")
@@ -106,8 +106,8 @@ def _liveSignature(method: Callable[..., object]) -> Signature:
 class ParameterBuilder(Protocol):
     def __call__(
         self,
-        syntheticSelf: _TypicalInstance[InputsProto, StateCore],
-        stateCore: object,
+        syntheticSelf: _TypicalInstance[InputsProto, SharedCore],
+        sharedCore: object,
         existingStateCluster: Mapping[str, object],
     ) -> object:
         ...
@@ -121,8 +121,8 @@ class StateBuilder(Protocol):
 
     def __call__(
         self,
-        syntheticSelf: _TypicalInstance[InputsProto, StateCore],
-        stateCore: object,
+        syntheticSelf: _TypicalInstance[InputsProto, SharedCore],
+        sharedCore: object,
         existingStateCluster: Mapping[str, object],
         args: Tuple[object, ...],
         kwargs: Dict[str, object],
@@ -131,7 +131,7 @@ class StateBuilder(Protocol):
         @param syntheticSelf: The L{_TypicalInstance} that contains the
             collection of state objects and the state core.
 
-        @param stateCore: The state core for the state machine.
+        @param sharedCore: The state core for the state machine.
 
         @param existingStateCluster: pass
 
@@ -143,8 +143,8 @@ class StateBuilder(Protocol):
 
 def _getOtherState(name: str) -> ParameterBuilder:
     def _otherState(
-        syntheticSelf: _TypicalInstance[InputsProto, StateCore],
-        stateCore: object,
+        syntheticSelf: _TypicalInstance[InputsProto, SharedCore],
+        sharedCore: object,
         existingStateCluster: Mapping[str, object],
     ) -> object:
         return existingStateCluster[name]
@@ -153,11 +153,11 @@ def _getOtherState(name: str) -> ParameterBuilder:
 
 
 def _getCore(
-    syntheticSelf: _TypicalInstance[InputsProto, StateCore],
-    stateCore: object,
+    syntheticSelf: _TypicalInstance[InputsProto, SharedCore],
+    sharedCore: object,
     existingStateCluster: Mapping[str, object],
 ) -> object:
-    return stateCore
+    return sharedCore
 
 
 def _getCoreAttribute(attr: str) -> ParameterBuilder:
@@ -169,18 +169,18 @@ def _getCoreAttribute(attr: str) -> ParameterBuilder:
     # rid of these sematics and see if there's some explicit / opt-in version
     # of this we could add as an API later.
     def _coreGetter(
-        syntheticSelf: _TypicalInstance[InputsProto, StateCore],
-        stateCore: object,
+        syntheticSelf: _TypicalInstance[InputsProto, SharedCore],
+        sharedCore: object,
         existingStateCluster: Mapping[str, object],
     ) -> object:
-        return getattr(stateCore, attr)
+        return getattr(sharedCore, attr)
 
     return _coreGetter
 
 
 def _getSynthSelf(
-    syntheticSelf: _TypicalInstance[InputsProto, StateCore],
-    stateCore: object,
+    syntheticSelf: _TypicalInstance[InputsProto, SharedCore],
+    sharedCore: object,
     existingStateCluster: Mapping[str, object],
 ) -> object:
     return syntheticSelf
@@ -197,8 +197,8 @@ def _stateBuilder(
     wanted = frozenset(stateFactorySignature.parameters)
 
     def _(
-        syntheticSelf: _TypicalInstance[InputsProto, StateCore],
-        stateCore: object,
+        syntheticSelf: _TypicalInstance[InputsProto, SharedCore],
+        sharedCore: object,
         existingStateCluster: Mapping[str, object],
         args: Tuple[object, ...],
         kwargs: Dict[str, object],
@@ -212,7 +212,7 @@ def _stateBuilder(
 
         for (extraParamName, extraParamFactory) in suppliers:
             boundArgs[extraParamName] = extraParamFactory(
-                syntheticSelf, stateCore, existingStateCluster
+                syntheticSelf, sharedCore, existingStateCluster
             )
         return stateFactory(**boundArgs)
 
@@ -223,7 +223,7 @@ def _buildParameterBuilders(
     stateFactorySignature: Signature,
     transitionSignature: Signature,
     stateFactories: Dict[str, Callable[..., UserStateType]],
-    stateCoreType: type[object],
+    sharedCoreType: type[object],
     inputProtocols: frozenset[ProtocolAtRuntime[object]],
 ) -> Iterable[tuple[str, ParameterBuilder]]:
     """
@@ -247,10 +247,10 @@ def _buildParameterBuilders(
     @param stateFactories: A dictionary mapping state-name to all the state
         factories used by the given L{TypicalBuilder}.
 
-    @param stateCoreType: the type of the state core associated with the
+    @param sharedCoreType: the type of the state core associated with the
         L{TypicalBuilder} we are building.
 
-    @todo: C{stateCoreType}'s type is somewhat ambiguous, as a type some places
+    @todo: C{sharedCoreType}'s type is somewhat ambiguous, as a type some places
         and a callable others; we should tighten that up to make it more
         consistent.
 
@@ -281,7 +281,7 @@ def _buildParameterBuilders(
             nameForParameterNotSuppliedByTransitionInputs,
             parameterType,
             stateFactories,
-            stateCoreType,
+            sharedCoreType,
             inputProtocols,
         )
 
@@ -290,7 +290,7 @@ def _oneParameterBuilder(
     nameForParameterNotSuppliedByTransitionInputs: str,
     parameterType: Any,
     stateFactories: Dict[str, Callable[..., UserStateType]],
-    stateCoreType: object,
+    sharedCoreType: object,
     inputProtocols: frozenset[ProtocolAtRuntime[object]],
 ) -> ParameterBuilder:
     """
@@ -306,7 +306,7 @@ def _oneParameterBuilder(
         # FIXME: this check is too loose, and checks only the class's direct
         # name, not its module or anything else.
         return _getOtherState(parameterType.__name__)
-    elif parameterType is stateCoreType:
+    elif parameterType is sharedCoreType:
         # If the parameter type is the state core type, pass the state core
         # along directly.
         return _getCore
@@ -332,7 +332,7 @@ def _oneParameterBuilder(
 
 
 def _buildStateBuilder(
-    stateCoreType: type[object],
+    sharedCoreType: type[object],
     stateFactory: Callable[..., Any],
     stateFactories: Dict[str, Callable[..., UserStateType]],
     transitionMethod: Any,
@@ -374,7 +374,7 @@ def _buildStateBuilder(
                 stateFactorySignature,
                 transitionSignature,
                 stateFactories,
-                stateCoreType,
+                sharedCoreType,
                 inputProtocols,
             )
         ),
@@ -398,7 +398,7 @@ def _bindableInputMethod(
 
     @wraps(inputMethod)
     def method(
-        self: _TypicalInstance[InputsProto, StateCore], *a: P.args, **kw: P.kwargs
+        self: _TypicalInstance[InputsProto, SharedCore], *a: P.args, **kw: P.kwargs
     ) -> object:
         oldStateName = self._transitioner._state
         oldStateObject = self._stateCluster[oldStateName]
@@ -414,7 +414,7 @@ def _bindableInputMethod(
         stateBuilder: StateBuilder = realMethod.__stateBuilder__
         stateEnter = None
         if newStateName not in self._stateCluster:
-            newBuilt = stateBuilder(self, self._stateCore, self._stateCluster, a, kw)
+            newBuilt = stateBuilder(self, self._sharedCore, self._stateCluster, a, kw)
             self._stateCluster[newStateName] = newBuilt
             stateEnter = getattr(newBuilt, "__automat_post_enter__", None)
         shouldStatePersist = (
@@ -432,16 +432,16 @@ def _bindableInputMethod(
 
 def _bindableCommonMethod(
     inputMethod: Callable[
-        Concatenate[_TypicalInstance[InputsProto, StateCore], P], object
+        Concatenate[_TypicalInstance[InputsProto, SharedCore], P], object
     ],
     impl: Callable[
         Concatenate[
-            _TypicalInstance[InputsProto, StateCore], StateCore, InputsProto, P
+            _TypicalInstance[InputsProto, SharedCore], SharedCore, InputsProto, P
         ],
         object,
     ],
     includePrivate: bool,
-) -> Callable[Concatenate[_TypicalInstance[InputsProto, StateCore], P], object]:
+) -> Callable[Concatenate[_TypicalInstance[InputsProto, SharedCore], P], object]:
     """
     Create a bindable method (i.e. "function for use at class scope") to
     implement a I{common behavior} across all states of a given
@@ -454,11 +454,11 @@ def _bindableCommonMethod(
 
     @wraps(inputMethod)
     def method(
-        self: _TypicalInstance[InputsProto, StateCore], *a: P.args, **kw: P.kwargs
+        self: _TypicalInstance[InputsProto, SharedCore], *a: P.args, **kw: P.kwargs
     ) -> object:
         return impl(
             self,
-            self._stateCore,
+            self._sharedCore,
             # TODO: includePrivate needs to be present in an @override that
             # more correctly describes the 3rd argument to the input impl as
             # potentially containing a private interface?
@@ -471,14 +471,14 @@ def _bindableCommonMethod(
 
 
 @dataclass
-class _TypicalInstance(Generic[InputsProto, StateCore]):
+class _TypicalInstance(Generic[InputsProto, SharedCore]):
     """
     Trivial superclass of state-cluster instances.  To application code,
     appears to be a provider of the C{InputsProto} protocol.  Methods are
     populated below by the logic in L{TypicalBuilder.buildClass}.
     """
 
-    _stateCore: StateCore
+    _sharedCore: SharedCore
     _transitioner: Transitioner
     _stateCluster: Dict[str, UserStateType] = field(default_factory=dict)
 
@@ -491,7 +491,7 @@ else:
 
 @dataclass
 class _TypicalClass(
-    Generic[InputsProto, StateCore, P],
+    Generic[InputsProto, SharedCore, P],
     _typeish,  # Lie about being a type to work around
     # https://github.com/python/mypy/issues/12974
 ):
@@ -501,10 +501,10 @@ class _TypicalClass(
     state-builder function, and it will type-check accordingly.
     """
 
-    _buildCore: Callable[P, StateCore]
+    _buildCore: Callable[P, SharedCore]
     _initialState: Type[UserStateType]
     _automaton: Automaton
-    _realSyntheticType: Type[_TypicalInstance[InputsProto, StateCore]]
+    _realSyntheticType: Type[_TypicalInstance[InputsProto, SharedCore]]
     _inputProtocols: frozenset[ProtocolAtRuntime[object]]
     _initialStateBuilder: StateBuilder
 
@@ -514,11 +514,11 @@ class _TypicalClass(
         something that appears to be an L{InputsProto}.
         """
         result = self._realSyntheticType(
-            stateCore := self._buildCore(*initArgs, **initKwargs),
+            sharedCore := self._buildCore(*initArgs, **initKwargs),
             Transitioner(self._automaton, self._initialState.__name__),
         )
         result._stateCluster[result._transitioner._state] = self._initialStateBuilder(
-            result, stateCore, result._stateCluster, initArgs, initKwargs
+            result, sharedCore, result._stateCluster, initArgs, initKwargs
         )
         return result  # type: ignore
 
@@ -539,11 +539,11 @@ class ErrorState:
     __persistState__ = False
 
 
-StateCoreContra = TypeVar("StateCoreContra", contravariant=True)
+SharedCoreContra = TypeVar("SharedCoreContra", contravariant=True)
 
 
-class NextStateFactory(Protocol[P, StateCoreContra]):
-    def __call__(self, core: StateCoreContra, *args: P.args, **kw: P.kwargs) -> object:
+class NextStateFactory(Protocol[P, SharedCoreContra]):
+    def __call__(self, core: SharedCoreContra, *args: P.args, **kw: P.kwargs) -> object:
         ...
 
 
@@ -671,13 +671,13 @@ def actuallyDefinedProtocolMethods(protocol: object) -> frozenset[str]:
 
 
 @dataclass
-class TypicalBuilder(Generic[InputsProto, StateCore, P]):
+class TypicalBuilder(Generic[InputsProto, SharedCore, P]):
     """
     Decorator-based interface.
     """
 
     _stateProtocol: ProtocolAtRuntime[InputsProto]
-    _buildCore: Callable[P, StateCore]
+    _buildCore: Callable[P, SharedCore]
     _privateProtocols: set[ProtocolAtRuntime[object]] = field(default_factory=set)
 
     # internal state
@@ -688,7 +688,7 @@ class TypicalBuilder(Generic[InputsProto, StateCore, P]):
         default_factory=dict
     )
 
-    def buildClass(self) -> _TypicalClass[InputsProto, StateCore, P]:
+    def buildClass(self) -> _TypicalClass[InputsProto, SharedCore, P]:
         """
         Transfer state class declarations into underlying state machine.
         """
@@ -701,7 +701,7 @@ class TypicalBuilder(Generic[InputsProto, StateCore, P]):
         allProtocols = frozenset([self._stateProtocol, *self._privateProtocols])
 
         # TODO: fix this to grab a return annotation or something
-        stateCoreType: type[object] = self._buildCore  # type:ignore[assignment]
+        sharedCoreType: type[object] = self._buildCore  # type:ignore[assignment]
 
         ns: Dict[str, object] = {
             "_stateFactories": stateFactories,
@@ -724,7 +724,7 @@ class TypicalBuilder(Generic[InputsProto, StateCore, P]):
                             stateName, inputName, newStateName, [outputName]
                         )
                         buildAfterFactories.append(
-                            (output, stateCoreType, stateClass, newStateFactory)
+                            (output, sharedCoreType, stateClass, newStateFactory)
                         )
             for eachInput in possibleInputs:
                 ns[eachInput] = _bindableInputMethod(
@@ -736,12 +736,12 @@ class TypicalBuilder(Generic[InputsProto, StateCore, P]):
 
         for (
             output,
-            stateCoreType,
+            sharedCoreType,
             stateClassName,
             newStateFactory,
         ) in buildAfterFactories:
             output.__stateBuilder__ = _buildStateBuilder(
-                stateCoreType,
+                sharedCoreType,
                 newStateFactory,
                 stateFactories,
                 output,
@@ -764,10 +764,10 @@ class TypicalBuilder(Generic[InputsProto, StateCore, P]):
         # initial state builder has to take the arguments for the state core's
         # constructor.
         initialStateBuilder = _buildStateBuilder(
-            stateCoreType,
+            sharedCoreType,
             self._stateClasses[0],
             stateFactories,
-            stateCoreType.__init__,
+            sharedCoreType.__init__,
             allProtocols,
         )
         return _TypicalClass(
@@ -835,8 +835,8 @@ class TypicalBuilder(Generic[InputsProto, StateCore, P]):
         self,
         input: Callable[Concatenate[SelfA, ThisInputArgs], R],
     ) -> Callable[
-        [Callable[Concatenate[InputsProto, StateCore, ThisInputArgs], R]],
-        Callable[Concatenate[InputsProto, StateCore, ThisInputArgs], R],
+        [Callable[Concatenate[InputsProto, SharedCore, ThisInputArgs], R]],
+        Callable[Concatenate[InputsProto, SharedCore, ThisInputArgs], R],
     ]:
         ...
 
@@ -846,8 +846,8 @@ class TypicalBuilder(Generic[InputsProto, StateCore, P]):
         input: Callable[Concatenate[SelfA, ThisInputArgs], R],
         privateType: ProtocolAtRuntime[PrivateProto],
     ) -> Callable[
-        [Callable[Concatenate[InputsProto, StateCore, PrivateProto, ThisInputArgs], R]],
-        Callable[Concatenate[InputsProto, StateCore, PrivateProto, ThisInputArgs], R],
+        [Callable[Concatenate[InputsProto, SharedCore, PrivateProto, ThisInputArgs], R]],
+        Callable[Concatenate[InputsProto, SharedCore, PrivateProto, ThisInputArgs], R],
     ]:
         ...
 
@@ -859,16 +859,16 @@ class TypicalBuilder(Generic[InputsProto, StateCore, P]):
         Callable[
             [
                 Callable[
-                    Concatenate[InputsProto, StateCore, PrivateProto, ThisInputArgs], R
+                    Concatenate[InputsProto, SharedCore, PrivateProto, ThisInputArgs], R
                 ]
             ],
             Callable[
-                Concatenate[InputsProto, StateCore, PrivateProto, ThisInputArgs], R
+                Concatenate[InputsProto, SharedCore, PrivateProto, ThisInputArgs], R
             ],
         ]
         | Callable[
-            [Callable[Concatenate[InputsProto, StateCore, ThisInputArgs], R]],
-            Callable[Concatenate[InputsProto, StateCore, ThisInputArgs], R],
+            [Callable[Concatenate[InputsProto, SharedCore, ThisInputArgs], R]],
+            Callable[Concatenate[InputsProto, SharedCore, ThisInputArgs], R],
         ]
     ):
         """

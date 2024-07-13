@@ -127,14 +127,14 @@ class PrivateInputs(Protocol):
         """
 
 
-class StateCore(object):
+class SharedCore(object):
     "It's a state core"
     count: int = 0
     shared: int = 10
 
 
-builder: TypicalBuilder[SomeInputs, StateCore, []] = TypicalBuilder(
-    SomeInputs, StateCore
+builder: TypicalBuilder[SomeInputs, SharedCore, []] = TypicalBuilder(
+    SomeInputs, SharedCore
 )
 
 # TODO: right now this must be module-scope because type annotations get
@@ -142,7 +142,7 @@ builder: TypicalBuilder[SomeInputs, StateCore, []] = TypicalBuilder(
 # .handle()
 @builder.common(SomeInputs.in_every_state)
 def everystate(
-    public_interface: SomeInputs, state_core: StateCore, fixture: TestCase
+    public_interface: SomeInputs, state_core: SharedCore, fixture: TestCase
 ) -> int:
     """
     In every state, we can implement this the same way.
@@ -153,7 +153,7 @@ def everystate(
     fixture.assertIn("valcheck", methods)
     fixture.assertIn("in_every_state", methods)
     fixture.assertNotIn("not_an_input", methods)
-    fixture.assertIsInstance(state_core, StateCore)
+    fixture.assertIsInstance(state_core, SharedCore)
     state_core.shared += 1
     return state_core.shared
 
@@ -161,7 +161,7 @@ def everystate(
 @builder.state()
 @dataclass
 class FirstState(object):
-    core: StateCore
+    core: SharedCore
 
     @builder.handle(SomeInputs.one)
     def go(self) -> int:
@@ -212,7 +212,7 @@ class FirstState(object):
 @builder.state()
 @dataclass
 class CapturesParam2:
-    core: StateCore
+    core: SharedCore
     param2: str
 
     @builder.handle(SomeInputs.reveal_param, enter=lambda: CapturesParam2)
@@ -222,7 +222,7 @@ class CapturesParam2:
 
 @builder.common(SomeInputs.use_private, PrivateInputs)
 def use_private(
-    public: SomeInputs, core: StateCore, private: PrivateInputs
+    public: SomeInputs, core: SharedCore, private: PrivateInputs
 ) -> PrivateInputs:
     return private
 
