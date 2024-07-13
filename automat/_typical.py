@@ -787,7 +787,9 @@ class TypicalBuilder(Generic[InputsProto, StateCore, P]):
             initialStateBuilder,
         )
 
-    def state(self, *, persist: bool = True, error: bool = False) -> Callable[[type[T]], type[T]]:
+    def state(
+        self, *, persist: bool = True, error: bool = False
+    ) -> Callable[[type[T]], type[T]]:
         """
         Decorate a state class to note that it's a state.
 
