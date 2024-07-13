@@ -52,25 +52,30 @@ if TYPE_CHECKING or sys.version_info >= (3, 9):
 
     P = ParamSpec("P")
     ThisInputArgs = ParamSpec("ThisInputArgs")
-    AnyArgs = Union[
-        Callable[Concatenate[StateCore, ThisInputArgs], T],
+    FlexibleStateFactory = Union[
+        # StateCore, InputsProtoInv, ThisInputArgs, T
         Callable[Concatenate[StateCore, InputsProtoInv, ThisInputArgs], T],
+        Callable[Concatenate[StateCore, ThisInputArgs], T],
         Callable[[StateCore, InputsProtoInv], T],
         Callable[[StateCore], T],
         Callable[[InputsProtoInv], T],
         Callable[[], T],
     ]
+    EnterMethod = Optional[
+        Callable[[], FlexibleStateFactory[StateCore, InputsProtoInv, ThisInputArgs, T]]
+    ]
     whatever = ...
 else:
     P = TypeVar("P")
     ThisInputArgs = TypeVar("ThisInputArgs")
-    AnyArgs = object
     whatever = object
 
-    class Concatenater:
+    class EmptyGetItem:
         def __getitem__(self, key: object) -> object:
             return None
 
+    FlexibleStateFactory = EmptyGetItem()
+    EnterMethod = EmptyGetItem()
     Concatenate = Concatenater()
     Concatenate[None]  # coverage
 
@@ -556,13 +561,28 @@ class NextStateFactory(Protocol[P, StateCoreContra]):
         ...
 
 
-class Handler(Protocol[InputsProto, SelfCon, ThisInputArgs, R, SelfA, StateCore]):
-    __automat_handler__: tuple[
-        Callable[Concatenate[SelfA, ThisInputArgs], R],
-        Optional[Callable[[], AnyArgs[StateCore, ThisInputArgs, InputsProto]]],
+class Handler(
+    Protocol[
+        # The State Core passed through to the state-builder method.
+        StateCore,
+        # The inputs protocol.
+        InputsProto,
+        # The 'self' passed to the input method; i.e. the state-specific class.
+        SelfCon,
+        # The arguments of the input method.
+        ThisInputArgs,
+        # The return value of the input method.
+        R,
+        # The return value of the state-builder method.
+        SelfB,
     ]
+):
+    __automat_input__: Callable[Concatenate[SelfCon, ThisInputArgs], R]
+    __automat_buildState__: EnterMethod[StateCore, InputsProto, ThisInputArgs, SelfB]
 
     def __call__(
+        # We are defining a method that goes on a class, so the "self" is the
+        # Handler itself, which doesn't actually get passed.
         notself,
         /,
         self: SelfCon,
@@ -582,10 +602,7 @@ class Handler(Protocol[InputsProto, SelfCon, ThisInputArgs, R, SelfA, StateCore]
         ...
 
 
-if TYPE_CHECKING:
-    AnyHandler = Handler[object, object, ..., object, object, object]
-else:
-    AnyHandler = Handler[object, object, object, object, object, object]
+AnyHandler = Handler[Any, Any, Any, Any, Any, Any]
 
 
 def _stateOutputs(
@@ -609,11 +626,14 @@ def _stateOutputs(
     for outputMethodName in dir(stateClass):
         maybeOutputMethod = getattr(stateClass, outputMethodName, None)
         if maybeOutputMethod is None or not hasattr(
-            maybeOutputMethod, "__automat_handler__"
+            maybeOutputMethod, "__automat_input__"
         ):
             continue
+
         outputMethod: AnyHandler = maybeOutputMethod
-        [inputMethod, enterParameter] = outputMethod.__automat_handler__
+        inputMethod = outputMethod.__automat_input__
+        enterParameter = outputMethod.__automat_buildState__
+
         newStateFactory = enterParameter() if enterParameter is not None else stateClass
         if sys.version_info >= (3, 9):
             for enterAnnotation in (
@@ -798,12 +818,10 @@ class TypicalBuilder(Generic[InputsProto, StateCore, P]):
     def handle(
         self,
         input: Callable[Concatenate[SelfA, ThisInputArgs], R],
-        enter: Optional[
-            Callable[[], AnyArgs[StateCore, ThisInputArgs, InputsProto]]
-        ] = None,
+        enter: EnterMethod = None,
     ) -> Callable[
         [Callable[Concatenate[SelfB, ThisInputArgs], R]],
-        Handler[InputsProto, SelfB, ThisInputArgs, R, SelfA, StateCore],
+        Handler[StateCore, InputsProto, SelfA, ThisInputArgs, R, SelfB],
     ]:
         """
         Define an input handler.
@@ -811,10 +829,12 @@ class TypicalBuilder(Generic[InputsProto, StateCore, P]):
 
         def decorator(
             c: OutputCallable,
-        ) -> Handler[InputsProto, SelfB, ThisInputArgs, R, SelfA, StateCore]:
-            result: Handler[InputsProto, SelfB, ThisInputArgs, R, SelfA, StateCore]
+        ) -> Handler[StateCore, InputsProto, SelfA, ThisInputArgs, R, SelfB]:
+            result: Handler[StateCore, InputsProto, SelfA, ThisInputArgs, R, SelfB]
             result = c  # type:ignore[assignment]
-            result.__automat_handler__ = (input, enter)
+            other: Callable[Concatenate[SelfA, ThisInputArgs], R] = input
+            result.__automat_input__ = other
+            result.__automat_buildState__ = enter
             return result
 
         return decorator
