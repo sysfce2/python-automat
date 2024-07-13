@@ -281,15 +281,19 @@ def _buildParameterBuilders(
     transitionSupplies = set(transitionSignature.parameters)
     notSuppliedParams = factoryNeeds - transitionSupplies
 
+    print("NSP", stateFactorySignature, notSuppliedParams)
+
     for maybeTypeMismatch in factoryNeeds & transitionSupplies:
-        if (
-            transitionSignature.parameters[maybeTypeMismatch].annotation
-            != stateFactorySignature.parameters[maybeTypeMismatch].annotation
-        ):
-            if (
-                stateFactorySignature.parameters[maybeTypeMismatch].default
-                == Parameter.empty
-            ):
+        fromTransition = transitionSignature.parameters[maybeTypeMismatch].annotation
+        fromFactory = stateFactorySignature.parameters[maybeTypeMismatch].annotation
+        if fromTransition != fromFactory:
+            fromFactoryDefault = stateFactorySignature.parameters[
+                maybeTypeMismatch
+            ].default
+            if fromFactoryDefault == Parameter.empty:
+                print(
+                    "type mismatch!~", maybeTypeMismatch, fromTransition, fromFactory, fromFactoryDefault
+                )
                 notSuppliedParams.add(maybeTypeMismatch)
 
     for nameForParameterNotSuppliedByTransitionInputs in notSuppliedParams:
@@ -319,6 +323,7 @@ def _oneParameterBuilder(
 
     @see: L{_buildParameterBuilders}
     """
+    print("oneParam:", nameForParameterNotSuppliedByTransitionInputs, parameterType)
     if parameterType.__name__ in stateFactories:
         # If the class name of the parameter's type exactly matches the name of
         # another state type within this state machine, return the
@@ -326,10 +331,12 @@ def _oneParameterBuilder(
 
         # FIXME: this check is too loose, and checks only the class's direct
         # name, not its module or anything else.
+        print(".otherState")
         return _getOtherState(parameterType.__name__)
     elif parameterType is stateCoreType:
         # If the parameter type is the state core type, pass the state core
         # along directly.
+        print(".getCore")
         return _getCore
     elif parameterType in inputProtocols:
         # If the parameter type is exactly one of the input Protocols (whether
@@ -337,6 +344,7 @@ def _oneParameterBuilder(
         # the private ones passed to L{TypicalBuilder._privateProtocols}), pass
         # the 'synthetic self' built internally which conforms to all the input protocols at
         # once.
+        print(".syntheticSelf")
         return _getSynthSelf
     else:
         # If the name of the parameter exaclty matches one of the attributes on
@@ -344,7 +352,8 @@ def _oneParameterBuilder(
 
         # FIXME: this is probably just too much magic at a distance, you can
         # just as easily ask for the state core itself and access its
-        # attributes.
+        # attributes.  Also, you can't take a default parameter.
+        print(".coreAttribute")
         return _getCoreAttribute(nameForParameterNotSuppliedByTransitionInputs)
 
 
@@ -418,27 +427,44 @@ def _bindableInputMethod(
         self: _TypicalInstance[InputsProto, StateCore], *a: P.args, **kw: P.kwargs
     ) -> object:
         oldStateName = self._transitioner._state
+        print(f"IMN!{oldStateName}.{inputMethodName}")
         oldStateObject = self._stateCluster[oldStateName]
         [[outputMethodName], tracer] = self._transitioner.transition(inputMethodName)
         newStateName = self._transitioner._state
         # here we need to invoke the output method
+        print(f"M: {oldStateName} {inputMethodName} ({outputMethodName})")
         if outputMethodName is None:
             self._stateCluster[newStateName] = errorState()
+            print(f"Unhandled {inputMethodName}")
             raise RuntimeError(
                 f"unhandled: state:{oldStateName} input:{inputMethodName}"
             )
         realMethod = getattr(oldStateObject, outputMethodName)
         stateBuilder: StateBuilder = realMethod.__stateBuilder__
         if newStateName not in self._stateCluster:
-            newBuilt = self._stateCluster[newStateName] = stateBuilder(
-                self, self._stateCore, self._stateCluster, a, kw
-            )
+            print(f"Building {newStateName}")
+            try:
+                newBuilt = stateBuilder(
+                    self, self._stateCore, self._stateCluster, a, kw
+                )
+            except:
+                import traceback
+
+                traceback.print_exc()
+                raise
+            print(f"Storing {newStateName}")
+            self._stateCluster[newStateName] = newBuilt
+            stateEnter = getattr(newBuilt, "__automat_post_enter__", None)
+            if stateEnter is not None:
+                stateEnter()
         result = realMethod(*a, **kw)
         if (
             newStateName != oldStateName
             and not oldStateObject.__persistState__  # type:ignore[attr-defined]
         ):
+            print(f"Clearing ephemeral {oldStateName}")
             del self._stateCluster[oldStateName]
+        print(f"Done {inputMethodName}")
         return result
 
     return method
@@ -818,10 +844,10 @@ class TypicalBuilder(Generic[InputsProto, StateCore, P]):
     def handle(
         self,
         input: Callable[Concatenate[SelfA, ThisInputArgs], R],
-        enter: EnterMethod = None,
+        enter: EnterMethod[StateCore, InputsProtoInv, ThisInputArgs, SelfB] = None,
     ) -> Callable[
-        [Callable[Concatenate[SelfB, ThisInputArgs], R]],
-        Handler[StateCore, InputsProto, SelfA, ThisInputArgs, R, SelfB],
+        [Callable[Concatenate[InputsProto, ThisInputArgs], R]],
+        Handler[StateCore, InputsProtoInv, SelfA, ThisInputArgs, R, SelfB],
     ]:
         """
         Define an input handler.
@@ -829,8 +855,8 @@ class TypicalBuilder(Generic[InputsProto, StateCore, P]):
 
         def decorator(
             c: OutputCallable,
-        ) -> Handler[StateCore, InputsProto, SelfA, ThisInputArgs, R, SelfB]:
-            result: Handler[StateCore, InputsProto, SelfA, ThisInputArgs, R, SelfB]
+        ) -> Handler[StateCore, InputsProtoInv, SelfA, ThisInputArgs, R, SelfB]:
+            result: Handler[StateCore, InputsProtoInv, SelfA, ThisInputArgs, R, SelfB]
             result = c  # type:ignore[assignment]
             other: Callable[Concatenate[SelfA, ThisInputArgs], R] = input
             result.__automat_input__ = other
