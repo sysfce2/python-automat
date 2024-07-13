@@ -117,7 +117,7 @@ def _liveSignature(method: Callable[..., object]) -> Signature:
     return result
 
 
-class ValueBuilder(Protocol):
+class ParameterBuilder(Protocol):
     def __call__(
         self,
         syntheticSelf: _TypicalInstance[InputsProto, StateCore],
@@ -132,6 +132,7 @@ class StateBuilder(Protocol):
     A L{StateBuilder} is a factory function which can create a State object
     from a collection of inputs.
     """
+
     def __call__(
         self,
         syntheticSelf: _TypicalInstance[InputsProto, StateCore],
@@ -154,7 +155,7 @@ class StateBuilder(Protocol):
         """
 
 
-def _getOtherState(name: str) -> ValueBuilder:
+def _getOtherState(name: str) -> ParameterBuilder:
     def _otherState(
         syntheticSelf: _TypicalInstance[InputsProto, StateCore],
         stateCore: object,
@@ -173,7 +174,7 @@ def _getCore(
     return stateCore
 
 
-def _getCoreAttribute(attr: str) -> ValueBuilder:
+def _getCoreAttribute(attr: str) -> ParameterBuilder:
     # TODO: automatically getting attributes from the core object rather than
     # the input signature is probably just a bad idea, way too much magic.  it
     # exists because the "state just constructed" hook of __post_init__ (or
@@ -201,13 +202,13 @@ def _getSynthSelf(
 
 def _stateBuilder(
     inputSignature: Signature,
-    factorySignature: Signature,
+    stateFactorySignature: Signature,
     stateFactory: Callable[P, Any],
-    suppliers: list[tuple[str, ValueBuilder]] = [],
+    suppliers: list[tuple[str, ParameterBuilder]] = [],
 ) -> StateBuilder:
     # the wanted parameters are the parameters requested by the state factory,
     # which is to say e.g. the dataclass's parameters
-    wanted = frozenset(factorySignature.parameters)
+    wanted = frozenset(stateFactorySignature.parameters)
 
     def _(
         syntheticSelf: _TypicalInstance[InputsProto, StateCore],
@@ -232,37 +233,68 @@ def _stateBuilder(
     return _
 
 
-def _valueSuppliers(
-    factorySignature: Signature,
+def _buildParameterBuilders(
+    stateFactorySignature: Signature,
     transitionSignature: Signature,
     stateFactories: Dict[str, Callable[..., UserStateType]],
     stateCoreType: type[object],
     inputProtocols: frozenset[ProtocolAtRuntime[object]],
-) -> Iterable[tuple[str, ValueBuilder]]:
+) -> Iterable[tuple[str, ParameterBuilder]]:
+    """
+    Construct an iterable of (parameter name, L{ParameterBuilder}) for all the
+    parameters required by the factory function that creates a state object,
+    that need to be I{implicitly} supplied during the given state-transition
+    method, because they will not be passed to the input function.
 
-    factoryNeeds = set(factorySignature.parameters)
+    This is called only during L{TypicalBuilder.buildClass} and is one phase of
+    a multi-step process, split out for legibility.
+
+    @param stateFactorySignature: The L{Signature} describing the callable that
+        will construct the state object.  i.e.: this is something decorated by
+        L{TypicalBuilder.state}.
+
+    @param transitionSignature: The L{Signature} describing the callable that
+        will be invoked as an input.  i.e.: this is the signature of something
+        decorated by L{TypicalBuilder.handle}, the signature of a method on the
+        C{_stateProtocol} attribute of L{TypicalBuilder}.
+
+    @param stateFactories: A dictionary mapping state-name to all the state
+        factories used by the given L{TypicalBuilder}.
+
+    @param stateCoreType: the type of the state core associated with the
+        L{TypicalBuilder} we are building.
+
+    @todo: C{stateCoreType}'s type is somewhat ambiguous, as a type some places
+        and a callable others; we should tighten that up to make it more
+        consistent.
+
+    @param inputProtocols: all of the input protocols for the state machine we
+        are building, both public and private.
+    """
+
+    factoryNeeds = set(stateFactorySignature.parameters)
     transitionSupplies = set(transitionSignature.parameters)
     notSuppliedParams = factoryNeeds - transitionSupplies
 
     for maybeTypeMismatch in factoryNeeds & transitionSupplies:
         if (
             transitionSignature.parameters[maybeTypeMismatch].annotation
-            != factorySignature.parameters[maybeTypeMismatch].annotation
+            != stateFactorySignature.parameters[maybeTypeMismatch].annotation
         ):
             if (
-                factorySignature.parameters[maybeTypeMismatch].default
+                stateFactorySignature.parameters[maybeTypeMismatch].default
                 == Parameter.empty
             ):
                 notSuppliedParams.add(maybeTypeMismatch)
 
-    for notSuppliedByTransitionName in notSuppliedParams:
+    for nameForParameterNotSuppliedByTransitionInputs in notSuppliedParams:
         # These are the parameters we will need to supply.
-        notSuppliedByTransition = factorySignature.parameters[
-            notSuppliedByTransitionName
+        notSuppliedByTransition = stateFactorySignature.parameters[
+            nameForParameterNotSuppliedByTransitionInputs
         ]
         parameterType = notSuppliedByTransition.annotation
-        yield notSuppliedByTransitionName, _oneValueSupplier(
-            notSuppliedByTransitionName,
+        yield nameForParameterNotSuppliedByTransitionInputs, _oneParameterBuilder(
+            nameForParameterNotSuppliedByTransitionInputs,
             parameterType,
             stateFactories,
             stateCoreType,
@@ -270,21 +302,45 @@ def _valueSuppliers(
         )
 
 
-def _oneValueSupplier(
-    notSuppliedByTransitionName: str,
+def _oneParameterBuilder(
+    nameForParameterNotSuppliedByTransitionInputs: str,
     parameterType: Any,
     stateFactories: Dict[str, Callable[..., UserStateType]],
     stateCoreType: object,
     inputProtocols: frozenset[ProtocolAtRuntime[object]],
-) -> ValueBuilder:
+) -> ParameterBuilder:
+    """
+    Construct a single implicit parameter builder.
+
+    @see: L{_buildParameterBuilders}
+    """
     if parameterType.__name__ in stateFactories:
+        # If the class name of the parameter's type exactly matches the name of
+        # another state type within this state machine, return the
+        # already-created state.
+
+        # FIXME: this check is too loose, and checks only the class's direct
+        # name, not its module or anything else.
         return _getOtherState(parameterType.__name__)
     elif parameterType is stateCoreType:
+        # If the parameter type is the state core type, pass the state core
+        # along directly.
         return _getCore
     elif parameterType in inputProtocols:
+        # If the parameter type is exactly one of the input Protocols (whether
+        # the public outward-facing one built by the typical machine or one of
+        # the private ones passed to L{TypicalBuilder._privateProtocols}), pass
+        # the 'synthetic self' built internally which conforms to all the input protocols at
+        # once.
         return _getSynthSelf
     else:
-        return _getCoreAttribute(notSuppliedByTransitionName)
+        # If the name of the parameter exaclty matches one of the attributes on
+        # the state core, pass that attribute along.
+
+        # FIXME: this is probably just too much magic at a distance, you can
+        # just as easily ask for the state core itself and access its
+        # attributes.
+        return _getCoreAttribute(nameForParameterNotSuppliedByTransitionInputs)
 
 
 def _buildStateBuilder(
@@ -315,23 +371,26 @@ def _buildStateBuilder(
     skipped = iter(transitionSignature.parameters.values())
     next(skipped)
     transitionSignature = transitionSignature.replace(parameters=list(skipped))
-    factorySignature = _liveSignature(stateFactory)
+    stateFactorySignature = _liveSignature(stateFactory)
 
-    # All the parameters that the transition expects MUST be supplied by the
-    # caller; they will be passed along to the factory.  The factory should not
-    # supply them in other ways (default values will not be respected,
-    # attributes won't be pulled from the state core, etc)
-
-    suppliers = list(
-        _valueSuppliers(
-            factorySignature,
-            transitionSignature,
-            stateFactories,
-            stateCoreType,
-            inputProtocols,
-        )
+    return _stateBuilder(
+        transitionSignature,
+        stateFactorySignature,
+        stateFactory,
+        # All the parameters that the transition expects MUST be supplied by
+        # the caller; they will be passed along to the factory.  The factory
+        # should not supply them in other ways (default values will not be
+        # respected, attributes won't be pulled from the state core, etc)
+        list(
+            _buildParameterBuilders(
+                stateFactorySignature,
+                transitionSignature,
+                stateFactories,
+                stateCoreType,
+                inputProtocols,
+            )
+        ),
     )
-    return _stateBuilder(transitionSignature, factorySignature, stateFactory, suppliers)
 
 
 _baseMethods = set(dir(Protocol))
