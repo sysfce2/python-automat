@@ -129,7 +129,10 @@ class StateCore(object):
     count: int = 0
     shared: int = 10
 
-builder: TypicalBuilder[SomeInputs, StateCore, []] = TypicalBuilder(SomeInputs, StateCore)
+
+builder: TypicalBuilder[SomeInputs, StateCore, []] = TypicalBuilder(
+    SomeInputs, StateCore
+)
 
 # TODO: right now this must be module-scope because type annotations get
 # evaluated in global scope, but we could capture scopes in .state() and
@@ -150,7 +153,6 @@ def everystate(
     fixture.assertIsInstance(state_core, StateCore)
     state_core.shared += 1
     return state_core.shared
-
 
 
 @builder.state()
@@ -209,6 +211,8 @@ class FirstState(object):
         Implement the private method.
         """
         return 3333
+
+
 @builder.state()
 @dataclass
 class CapturesParam2:
@@ -304,6 +308,10 @@ class CoreDataRequirer(object):
     def get(self) -> int:
         return self.count
 
+    @builder.handle(SomeInputs.ephemeral, enter=lambda: Ephemeral)
+    def backToEphemeral(self) -> None:
+        pass
+
     @builder.handle(SomeInputs.valcheck2)
     def getshared(self) -> int:
         return self.shared
@@ -317,10 +325,16 @@ class CoreDataRequirer(object):
 @dataclass
 class Ephemeral:
     count: int
+    myCount: int = field(default=0, init=False)
 
     @builder.handle(SomeInputs.valcheck)
     def get(self):
         return self.count
+
+    @builder.handle(SomeInputs.valcheck2, lambda: Ephemeral)
+    def getAndIncrement(self) -> int:
+        self.myCount += 1
+        return self.myCount
 
     @builder.handle(SomeInputs.persistent, enter=lambda: CoreDataRequirer)
     def persistent(self) -> None:
@@ -475,6 +489,22 @@ class TypicalTests(TestCase):
         self.assertEqual(i.valcheck(), 3)
         i.persistent()
         self.assertEqual(i.valcheck(), 0)
+
+    def test_non_persistent_resets_on_exit_but_not_before(self) -> None:
+        """
+        A non-persistent state is forgotten when transitioning away, but
+        maintains its internal state when transitioning back to itself.
+        """
+        i = C()
+        i.ephemeral()
+        self.assertEqual(i.valcheck2(), 1)
+        self.assertEqual(i.valcheck2(), 2)
+        self.assertEqual(i.valcheck2(), 3)
+        i.persistent()
+        i.ephemeral()
+        self.assertEqual(i.valcheck2(), 1)
+        self.assertEqual(i.valcheck2(), 2)
+        self.assertEqual(i.valcheck2(), 3)
 
     def test_state_constructor_from_transition_signature(self) -> None:
         """
