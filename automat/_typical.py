@@ -76,7 +76,7 @@ else:
 
     FlexibleStateFactory = EmptyGetItem()
     EnterMethod = EmptyGetItem()
-    Concatenate = Concatenater()
+    Concatenate = EmptyGetItem()
     Concatenate[None]  # coverage
 
 
