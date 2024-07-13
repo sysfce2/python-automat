@@ -31,7 +31,7 @@ jobs:
       - name: Tox Run
         run:  |
           pip install tox;
-          TOX_ENV="py$(echo ${{ matrix.python }} | sed -e s/\.//g)-${{ matrix.TOX_ENV }}";
+          TOX_ENV="py$(echo ${{ matrix.python }} | sed -e 's/\.//g')-${{ matrix.TOX_ENV }}";
           echo "Starting: ${TOX_ENV} ${PUSH_DOCS}"
           if [[ -n "${TOX_ENV}" ]]; then
             tox -e "$TOX_ENV";
