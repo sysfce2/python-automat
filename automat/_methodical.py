@@ -1,4 +1,5 @@
 # -*- test-case-name: automat._test.test_methodical -*-
+from __future__ import annotations
 
 import collections
 from functools import wraps
