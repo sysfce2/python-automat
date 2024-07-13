@@ -431,6 +431,7 @@ def _bindableInputMethod(
         oldStateObject = self._stateCluster[oldStateName]
         [[outputMethodName], tracer] = self._transitioner.transition(inputMethodName)
         newStateName = self._transitioner._state
+        print(f"TT!{newStateName}")
         # here we need to invoke the output method
         print(f"M: {oldStateName} {inputMethodName} ({outputMethodName})")
         if outputMethodName is None:
@@ -441,6 +442,7 @@ def _bindableInputMethod(
             )
         realMethod = getattr(oldStateObject, outputMethodName)
         stateBuilder: StateBuilder = realMethod.__stateBuilder__
+        stateEnter = None
         if newStateName not in self._stateCluster:
             print(f"Building {newStateName}")
             try:
@@ -455,15 +457,18 @@ def _bindableInputMethod(
             print(f"Storing {newStateName}")
             self._stateCluster[newStateName] = newBuilt
             stateEnter = getattr(newBuilt, "__automat_post_enter__", None)
-            if stateEnter is not None:
-                stateEnter()
-        result = realMethod(*a, **kw)
         if (
             newStateName != oldStateName
             and not oldStateObject.__persistState__  # type:ignore[attr-defined]
         ):
             print(f"Clearing ephemeral {oldStateName}")
             del self._stateCluster[oldStateName]
+        if stateEnter is not None:
+            print("doing special state enter hook", stateEnter.__self__.__class__.__name__)
+            stateEnter()
+            print("did special state enter hook", stateEnter.__self__.__class__.__name__)
+        print(f"invoking {realMethod}")
+        result = realMethod(*a, **kw)
         print(f"Done {inputMethodName}")
         return result
 
