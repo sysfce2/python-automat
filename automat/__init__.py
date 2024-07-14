@@ -5,7 +5,7 @@ from ._typical import TypicalBuilder, Enter
 
 __all__ = [
     "MethodicalMachine",
-    "TypicalMachine",
+    "TypicalBuilder",
     "NoTransition",
     "Enter",
 ]
