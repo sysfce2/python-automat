@@ -8,6 +8,8 @@ from twisted.python.modules import PythonAttribute, PythonModule, getModule
 
 from automat import MethodicalMachine
 
+from ._typical import _TypicalClass
+
 
 def isOriginalLocation(attr: PythonAttribute | PythonModule) -> bool:
     """
@@ -28,7 +30,7 @@ def isOriginalLocation(attr: PythonAttribute | PythonModule) -> bool:
 
 def findMachinesViaWrapper(
     within: PythonModule | PythonAttribute,
-) -> Iterator[tuple[str, MethodicalMachine]]:
+) -> Iterator[tuple[str, MethodicalMachine | _TypicalClass]]:
     """
     Recursively yield L{MethodicalMachine}s and their FQPNs within a
     L{PythonModule} or a L{twisted.python.modules.PythonAttribute}
@@ -47,13 +49,17 @@ def findMachinesViaWrapper(
     @return: a generator which yields FQPN, L{MethodicalMachine} pairs.
     """
     queue = collections.deque([within])
-    visited: set[PythonModule | PythonAttribute | MethodicalMachine | type[Any]] = set()
+    visited: set[
+        PythonModule | PythonAttribute | MethodicalMachine | _TypicalClass | type[Any]
+    ] = set()
 
     while queue:
         attr = queue.pop()
         value = attr.load()
 
-        if isinstance(value, MethodicalMachine) and value not in visited:
+        if (
+            isinstance(value, MethodicalMachine) or isinstance(value, _TypicalClass)
+        ) and value not in visited:
             visited.add(value)
             yield attr.name, value
         elif (
@@ -138,7 +144,7 @@ def wrapFQPN(fqpn: str) -> PythonModule | PythonAttribute:
     return attribute
 
 
-def findMachines(fqpn: str) -> Iterator[tuple[str, MethodicalMachine]]:
+def findMachines(fqpn: str) -> Iterator[tuple[str, MethodicalMachine | _TypicalClass]]:
     """
     Recursively yield L{MethodicalMachine}s and their FQPNs in and
     under the a Python object specified by an FQPN.

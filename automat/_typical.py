@@ -485,11 +485,12 @@ class _TypicalInstance(Generic[InputsProto, SharedCore]):
 
 if TYPE_CHECKING:
     _typeish = type
+    from graphviz import Digraph
 else:
     _typeish = object
 
 
-@dataclass
+@dataclass(eq=False)
 class _TypicalClass(
     Generic[InputsProto, SharedCore, P],
     _typeish,  # Lie about being a type to work around
@@ -528,6 +529,16 @@ class _TypicalClass(
         points to this object.
         """
         return isinstance(other, self._realSyntheticType)
+
+    def asDigraph(self) -> Digraph:
+        from ._visualize import makeDigraph
+
+        return makeDigraph(
+            self._automaton,
+            stateAsString=lambda state: repr(state),
+            inputAsString=lambda input: repr(input),
+            outputAsString=lambda output: repr(output),
+        )
 
 
 class ErrorState:
