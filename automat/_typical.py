@@ -610,37 +610,33 @@ def _stateOutputs(
         4. a L{FlexibleStateFactory} that can construct a state.
     """
     for outputMethodName in dir(stateClass):
-        maybeOutputMethod = getattr(stateClass, outputMethodName, None)
-        if maybeOutputMethod is None or not hasattr(
-            maybeOutputMethod, "__automat_input__"
-        ):
+        outputMethod: Handler[Any, SelfA, Any, Any, object] | None = getattr(
+            stateClass, outputMethodName, None
+        )
+        if outputMethod is None or not hasattr(outputMethod, "__automat_input__"):
             continue
-
-        outputMethod: Handler[Any, SelfA, Any, Any, object] = maybeOutputMethod
         inputMethod = outputMethod.__automat_input__
         enterParameter = outputMethod.__automat_buildState__
-
         newStateFactory: FlexibleStateFactory[object]
         if enterParameter is not None:
             newStateFactory = enterParameter()
         else:
-            newStateFactory = stateClass  # type:ignore[assignment]
-
-        for enterAnnotation in (
-            each
-            for each in getattr(
-                get_type_hints(outputMethod, include_extras=True).get("return"),
-                "__metadata__",
-                (),
-            )
-            if isinstance(each, Enter)
-        ):
-            newStateFactory = enterAnnotation.state
-        newStateName: str = newStateFactory.__name__
+            print("evaluating type hints for", outputMethod)
+            return_hint = get_type_hints(
+                outputMethod,
+                include_extras=True,
+            ).get("return")
+            metadata = getattr(return_hint, "__metadata__", ())
+            enterAnnotations = (each for each in metadata if isinstance(each, Enter))
+            for enterAnnotation in enterAnnotations:
+                newStateFactory = enterAnnotation.state
+                break
+            else:
+                newStateFactory = stateClass  # type:ignore[assignment]
         yield (
             outputMethodName,
             inputMethod.__name__,
-            newStateName,
+            newStateFactory.__name__,
             newStateFactory,
         )
 
@@ -846,7 +842,11 @@ class TypicalBuilder(Generic[InputsProto, SharedCore, P]):
         input: Callable[Concatenate[SelfA, ThisInputArgs], R],
         privateType: ProtocolAtRuntime[PrivateProto],
     ) -> Callable[
-        [Callable[Concatenate[InputsProto, SharedCore, PrivateProto, ThisInputArgs], R]],
+        [
+            Callable[
+                Concatenate[InputsProto, SharedCore, PrivateProto, ThisInputArgs], R
+            ]
+        ],
         Callable[Concatenate[InputsProto, SharedCore, PrivateProto, ThisInputArgs], R],
     ]:
         ...

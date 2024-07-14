@@ -13,6 +13,9 @@ if sys.version_info >= (3, 10):
 else:
     from typing_extensions import Annotated
 
+    # allow tuple[...] to evaluate in type hints
+    from typing import Tuple as tuple
+
 from unittest import TestCase
 from .._typical import TypicalBuilder
 from automat import Enter
