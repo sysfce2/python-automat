@@ -621,7 +621,6 @@ def _stateOutputs(
         if enterParameter is not None:
             newStateFactory = enterParameter()
         else:
-            print("evaluating type hints for", outputMethod)
             return_hint = get_type_hints(
                 outputMethod,
                 include_extras=True,
