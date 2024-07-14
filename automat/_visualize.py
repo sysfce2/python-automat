@@ -1,21 +1,25 @@
 from __future__ import print_function
+
 import argparse
 import sys
+from typing import Callable, Iterator
 
 import graphviz
 
+from ._core import Automaton
 from ._discover import findMachines
+from ._methodical import MethodicalMachine
 
 
-def _gvquote(s):
+def _gvquote(s: str) -> str:
     return '"{}"'.format(s.replace('"', r"\""))
 
 
-def _gvhtml(s):
+def _gvhtml(s: str) -> str:
     return "<{}>".format(s)
 
 
-def elementMaker(name, *children, **attrs):
+def elementMaker(name: str, *children: str, **attrs: str) -> str:
     """
     Construct a string from the HTML element description.
     """
@@ -29,7 +33,12 @@ def elementMaker(name, *children, **attrs):
     )
 
 
-def tableMaker(inputLabel, outputLabels, port, _E=elementMaker):
+def tableMaker(
+    inputLabel: str,
+    outputLabels: list[str],
+    port: str,
+    _E: Callable[..., str] = elementMaker,
+) -> str:
     """
     Construct an HTML table to label a state transition.
     """
@@ -59,7 +68,12 @@ def tableMaker(inputLabel, outputLabels, port, _E=elementMaker):
     return _E("table", *rows)
 
 
-def makeDigraph(automaton, inputAsString=repr, outputAsString=repr, stateAsString=repr):
+def makeDigraph(
+    automaton: Automaton,
+    inputAsString: Callable[[object], str] = repr,
+    outputAsString: Callable[[object], str] = repr,
+    stateAsString: Callable[[object], str] = repr,
+) -> graphviz.Digraph:
     """
     Produce a L{graphviz.Digraph} object from an automaton.
     """
@@ -108,11 +122,13 @@ def makeDigraph(automaton, inputAsString=repr, outputAsString=repr, stateAsStrin
 
 
 def tool(
-    _progname=sys.argv[0],
-    _argv=sys.argv[1:],
-    _syspath=sys.path,
-    _findMachines=findMachines,
-    _print=print,
+    _progname: str = sys.argv[0],
+    _argv: list[str] = sys.argv[1:],
+    _syspath: list[str] = sys.path,
+    _findMachines: Callable[
+        [str], Iterator[tuple[str, MethodicalMachine]]
+    ] = findMachines,
+    _print: Callable[..., None] = print,
 ):
     """
     Entry point for command line utility.

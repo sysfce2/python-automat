@@ -1,10 +1,15 @@
+from __future__ import annotations
+
 import collections
 import inspect
+from typing import Any, Iterator
+
+from twisted.python.modules import PythonAttribute, PythonModule, getModule
+
 from automat import MethodicalMachine
-from twisted.python.modules import PythonModule, getModule
 
 
-def isOriginalLocation(attr):
+def isOriginalLocation(attr: PythonAttribute | PythonModule) -> bool:
     """
     Attempt to discover if this appearance of a PythonAttribute
     representing a class refers to the module where that class was
@@ -21,7 +26,9 @@ def isOriginalLocation(attr):
     return currentModule.name == sourceModule.__name__
 
 
-def findMachinesViaWrapper(within):
+def findMachinesViaWrapper(
+    within: PythonModule | PythonAttribute,
+) -> Iterator[tuple[str, MethodicalMachine]]:
     """
     Recursively yield L{MethodicalMachine}s and their FQPNs within a
     L{PythonModule} or a L{twisted.python.modules.PythonAttribute}
@@ -40,7 +47,7 @@ def findMachinesViaWrapper(within):
     @return: a generator which yields FQPN, L{MethodicalMachine} pairs.
     """
     queue = collections.deque([within])
-    visited = set()
+    visited: set[PythonModule | PythonAttribute | MethodicalMachine | type[Any]] = set()
 
     while queue:
         attr = queue.pop()
@@ -78,7 +85,7 @@ class NoObject(InvalidFQPN):
     """
 
 
-def wrapFQPN(fqpn):
+def wrapFQPN(fqpn: str) -> PythonModule | PythonAttribute:
     """
     Given an FQPN, retrieve the object via the global Python module
     namespace and wrap it with a L{PythonModule} or a
@@ -131,7 +138,7 @@ def wrapFQPN(fqpn):
     return attribute
 
 
-def findMachines(fqpn):
+def findMachines(fqpn: str) -> Iterator[tuple[str, MethodicalMachine]]:
     """
     Recursively yield L{MethodicalMachine}s and their FQPNs in and
     under the a Python object specified by an FQPN.
