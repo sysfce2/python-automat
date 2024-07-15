@@ -1,7 +1,8 @@
+from __future__ import annotations
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Callable, Protocol
 
-from automat import TypifiedBuilder, TypifiedState
+from automat import TypifiedBuilder
 
 
 @dataclass
@@ -29,6 +30,7 @@ class Ready:
     def brew(self) -> Mixture:
         print(f"brewing {self.beans} with {self.water} in {self.carafe}")
         return Mixture(self.beans, self.water)
+
 
 @dataclass
 class Mixture:
@@ -74,15 +76,14 @@ class BrewCore:
     brewing: Mixture | None = None
 
 
-def _coffee_machine() -> TypifiedBuilder[Brewer, BrewCore]:
+def _coffee_machine() -> TypifiedBuilder[_BrewerInternals, BrewCore]:
     """
     Best practice: these functions are all fed in to the builder, they don't
     need to call each other, so they don't need to be defined globally.  Use a
     function scope to avoid littering a module with states and such.
     """
-    builder = TypifiedBuilder[_BrewerInternals, BrewCore](BrewCore)
-
-    not_ready: TypifiedState = builder.state("HaveBeans")
+    builder: TypifiedBuilder[_BrewerInternals, BrewCore] = TypifiedBuilder(BrewCore)
+    not_ready = builder.state("HaveBeans")
 
     def build_ready(
         brewer: _BrewerInternals,
@@ -97,7 +98,9 @@ def _coffee_machine() -> TypifiedBuilder[Brewer, BrewCore]:
         brewer: _BrewerInternals,
         core: BrewCore,
     ) -> Mixture:
-        raise NotImplementedError("mixture must be conveyed by return value, we can't build it")
+        raise NotImplementedError(
+            "mixture must be conveyed by return value, we can't build it"
+        )
 
     ready = builder.stateful_state("Ready", Ready, build_ready)
     brewing = builder.stateful_state("Brewing", Mixture, build_mixture)
@@ -121,7 +124,7 @@ def _coffee_machine() -> TypifiedBuilder[Brewer, BrewCore]:
         core.water = water
         ready_check(brewer, core)
 
-    @not_ready.transition(Brewer.put_in_beans, not_ready)
+    @not_ready.transition(Brewer.put_in_carafe, not_ready)
     def put_carafe(brewer: _BrewerInternals, core: BrewCore, carafe: Carafe) -> None:
         core.carafe = carafe
         ready_check(brewer, core)
@@ -138,26 +141,31 @@ def _coffee_machine() -> TypifiedBuilder[Brewer, BrewCore]:
 
     # all transitions into this state should invoke this at some point in the
     # transition; after or before the main function?
-    @ready.setup()
-    def ready_now(brewer: _BrewerInternals, core: BrewCore, ready: Ready):
+    @ready.stateful_setup()
+    def ready_now(brewer: _BrewerInternals, core: BrewCore, ready: Ready) -> None:
         core.ready_light.on = True
 
     # all transitions out should invoke this
-    @ready.cleanup()
-    def not_ready_anymore(brewer: _BrewerInternals, core: BrewCore, ready: Ready):
+    @ready.stateful_cleanup()
+    def not_ready_anymore(
+        brewer: _BrewerInternals, core: BrewCore, ready: Ready
+    ) -> None:
         core.ready_light.on = False
 
-    @ready.convey(Brewer.brew_button, brewing)
-    def brew(brewer: _BrewerInternals, core: BrewCore, ready: Ready) -> tuple [
+    @ready.stateful_convey(Brewer.brew_button, brewing)
+    def brew(
+        brewer: _BrewerInternals, core: BrewCore, ready: Ready
+    ) -> tuple[
         # it's a tuple because we have to convey the result of
         # brew_button(None) as well as the required state for the 'brewing'
         # stateful state(Mixture)
-        None, Mixture
+        None,
+        Mixture,
     ]:
         core.brew_light.on = True
         return (None, ready.brew())
 
-    @brewing.transition(Brewer.wait_a_while, not_ready)
+    @brewing.stateful_transition(_BrewerInternals.wait_a_while, not_ready)
     def brewed(brewer: _BrewerInternals, core: BrewCore, mixture: Mixture) -> Mixture:
         core.brew_light.on = False
         return mixture
@@ -165,8 +173,13 @@ def _coffee_machine() -> TypifiedBuilder[Brewer, BrewCore]:
     return builder
 
 
-CoffeeMachine = _coffee_machine().build()
+CoffeeMachine: Callable[[BrewCore], Brewer] = _coffee_machine().build()
 
-
-def make_machine() -> Brewer:
-    return CoffeeMachine()
+if __name__ == '__main__':
+    machine = CoffeeMachine(core:=BrewCore(Light(), Light()))
+    machine.put_in_beans(Beans("light roast"))
+    machine.put_in_water(Water())
+    machine.put_in_carafe(Carafe())
+    machine.brew_button()
+    brewed = machine.wait_a_while()
+    print(brewed)
