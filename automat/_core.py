@@ -85,7 +85,7 @@ class Automaton(Generic[State, Input, Output]):
         inState: State,
         inputSymbol: Input,
         outState: State,
-        outputSymbols: tuple[Output],
+        outputSymbols: tuple[Output, ...],
     ):
         """
         Add the given transition to the outputSymbol. Raise ValueError if
