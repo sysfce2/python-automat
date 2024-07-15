@@ -104,8 +104,7 @@ class ParameterBuilder(Protocol):
         syntheticSelf: _TypicalInstance[InputsProto, SharedCore],
         sharedCore: object,
         existingStateCluster: Mapping[str, object],
-    ) -> object:
-        ...
+    ) -> object: ...
 
 
 class StateBuilder(Protocol):
@@ -205,7 +204,7 @@ def _stateBuilder(
         for unwanted in frozenset(boundArgs) - wanted:
             del boundArgs[unwanted]
 
-        for (extraParamName, extraParamFactory) in suppliers:
+        for extraParamName, extraParamFactory in suppliers:
             boundArgs[extraParamName] = extraParamFactory(
                 syntheticSelf, sharedCore, existingStateCluster
             )
@@ -549,8 +548,9 @@ SharedCoreContra = TypeVar("SharedCoreContra", contravariant=True)
 
 
 class NextStateFactory(Protocol[P, SharedCoreContra]):
-    def __call__(self, core: SharedCoreContra, *args: P.args, **kw: P.kwargs) -> object:
-        ...
+    def __call__(
+        self, core: SharedCoreContra, *args: P.args, **kw: P.kwargs
+    ) -> object: ...
 
 
 class Handler(
@@ -578,18 +578,15 @@ class Handler(
         self: SelfCon,
         *args: ThisInputArgs.args,
         **kwargs: ThisInputArgs.kwargs,
-    ) -> R:
-        ...
+    ) -> R: ...
 
     @overload
-    def __get__(self: T, instance: None, owner: Optional[Type[object]] = None) -> T:
-        ...
+    def __get__(self: T, instance: None, owner: Optional[Type[object]] = None) -> T: ...
 
     @overload
     def __get__(
         self, instance: object, owner: Optional[Type[object]] = None
-    ) -> Callable[ThisInputArgs, R]:
-        ...
+    ) -> Callable[ThisInputArgs, R]: ...
 
 
 AnyHandler = Handler[Any, Any, Any, Any, Any]
@@ -813,8 +810,7 @@ class TypicalBuilder(Generic[InputsProto, SharedCore, P]):
     ) -> Callable[
         [Callable[Concatenate[InputsProto, SharedCore, ThisInputArgs], R]],
         Callable[Concatenate[InputsProto, SharedCore, ThisInputArgs], R],
-    ]:
-        ...
+    ]: ...
 
     @overload
     def common(
@@ -828,8 +824,7 @@ class TypicalBuilder(Generic[InputsProto, SharedCore, P]):
             ]
         ],
         Callable[Concatenate[InputsProto, SharedCore, PrivateProto, ThisInputArgs], R],
-    ]:
-        ...
+    ]: ...
 
     def common(
         self,

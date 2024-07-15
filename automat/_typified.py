@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
-from typing import Any, Callable, Concatenate, Generic, ParamSpec, TypeVar
+from typing import Any, Callable, Generic, TypeVar, overload
+
+if sys.version_info < (3, 10):
+    from typing_extensions import Concatenate, ParamSpec
+else:
+    from typing import Concatenate, ParamSpec
 
 from ._core import Automaton, Transitioner
 from ._runtimeproto import (
@@ -12,32 +18,43 @@ from ._runtimeproto import (
 
 InputProtocol = TypeVar("InputProtocol")
 InputProtoSelf = TypeVar("InputProtoSelf")
-SharedCore = TypeVar("SharedCore")
-StateSpecificData = TypeVar("StateSpecificData")
+Core = TypeVar("Core")
+Data = TypeVar("Data")
 P = ParamSpec("P")
-FactoryParams = ParamSpec("FactoryParams")
 R = TypeVar("R")
 OtherInputProtocol = TypeVar("OtherInputProtocol")
-OtherStateSpecificData = TypeVar("OtherStateSpecificData")
-OtherFactoryParams = ParamSpec("OtherFactoryParams")
+OtherData = TypeVar("OtherData")
+Decorator = Callable[[Callable[P, R]], Callable[P, R]]
 
 
 @dataclass
-class TypifiedState(Generic[InputProtocol, SharedCore]):
+class TypifiedState(Generic[InputProtocol, Core]):
     name: str
-    builder: TypifiedBuilder[InputProtocol, SharedCore]
+    builder: TypifiedBuilder[InputProtocol, Core]
 
     def transition(
         self,
         input_method: Callable[Concatenate[InputProtocol, P], R],
-        new_state: AnyState,
-    ) -> Callable[
-        [Callable[Concatenate[InputProtocol, SharedCore, P], R]],
-        Callable[Concatenate[InputProtocol, SharedCore, P], R],
-    ]:
+        new_state: TypifiedState[InputProtocol, Core],
+    ) -> Decorator[Concatenate[InputProtocol, Core, P], R]:
         def decorator(
-            decoratee: Callable[Concatenate[InputProtocol, SharedCore, P], R]
-        ) -> Callable[Concatenate[InputProtocol, SharedCore, P], R]:
+            decoratee: Callable[Concatenate[InputProtocol, Core, P], R]
+        ) -> Callable[Concatenate[InputProtocol, Core, P], R]:
+            # FIXME: actually register transition
+            return decoratee
+
+        return decorator
+
+    def data_transition(
+        self,
+        input_method: Callable[Concatenate[InputProtocol, P], R],
+        new_state: TypifiedDataState[InputProtocol, Core, OtherData],
+    ) -> Decorator[Concatenate[InputProtocol, Core, P], tuple[R, OtherData]]:
+        def decorator(
+            decoratee: Callable[
+                Concatenate[InputProtocol, Core, P], tuple[R, OtherData]
+            ]
+        ) -> Callable[Concatenate[InputProtocol, Core, P], tuple[R, OtherData]]:
             # FIXME: actually register transition
             return decoratee
 
@@ -45,136 +62,128 @@ class TypifiedState(Generic[InputProtocol, SharedCore]):
 
 
 @dataclass
-class TypifiedStatefulState(
-    Generic[InputProtocol, SharedCore, StateSpecificData, FactoryParams]
-):
+class TypifiedDataState(Generic[InputProtocol, Core, Data]):
     name: str
-    builder: TypifiedBuilder[InputProtocol, SharedCore]
-    factory: Callable[FactoryParams, StateSpecificData]
+    builder: TypifiedBuilder[InputProtocol, Core]
 
-    def stateful_setup(
+    def data_setup(
         self,
     ) -> Callable[
-        [Callable[[InputProtocol, SharedCore, StateSpecificData], None]],
-        Callable[[InputProtocol, SharedCore, StateSpecificData], None],
+        [Callable[[InputProtocol, Core, Data], None]],
+        Callable[[InputProtocol, Core, Data], None],
     ]:
         def decorator(
-            decoratee: Callable[[InputProtocol, SharedCore, StateSpecificData], None]
-        ) -> Callable[[InputProtocol, SharedCore, StateSpecificData], None]:
+            decoratee: Callable[[InputProtocol, Core, Data], None]
+        ) -> Callable[[InputProtocol, Core, Data], None]:
             return decoratee
 
         # FIXME: actually register setup
         return decorator
 
-    def stateful_cleanup(
+    def data_cleanup(
         self,
     ) -> Callable[
-        [Callable[[InputProtocol, SharedCore, StateSpecificData], None]],
-        Callable[[InputProtocol, SharedCore, StateSpecificData], None],
+        [Callable[[InputProtocol, Core, Data], None]],
+        Callable[[InputProtocol, Core, Data], None],
     ]:
         def decorator(
-            decoratee: Callable[[InputProtocol, SharedCore, StateSpecificData], None]
-        ) -> Callable[[InputProtocol, SharedCore, StateSpecificData], None]:
+            decoratee: Callable[[InputProtocol, Core, Data], None]
+        ) -> Callable[[InputProtocol, Core, Data], None]:
             return decoratee
 
         # FIXME: actually register cleanup
         return decorator
 
-    def stateful_convey(
+    def transition(
         self,
         input_method: Callable[Concatenate[InputProtocol, P], R],
-        new_state: TypifiedStatefulState[
-            OtherInputProtocol, SharedCore, OtherStateSpecificData, OtherFactoryParams
-        ],
-    ) -> Callable[
-        [
-            Callable[
-                Concatenate[InputProtocol, SharedCore, StateSpecificData, P],
-                tuple[R, OtherStateSpecificData],
-            ]
-        ],
-        Callable[
-            Concatenate[InputProtocol, SharedCore, StateSpecificData, P],
-            tuple[R, OtherStateSpecificData],
-        ],
-    ]:
+        new_state: TypifiedState[InputProtocol, Core],
+    ) -> Decorator[Concatenate[InputProtocol, Core, Data, P], R]:
         def decorator(
-            decoratee: Callable[
-                Concatenate[InputProtocol, SharedCore, StateSpecificData, P],
-                tuple[R, OtherStateSpecificData],
-            ]
-        ) -> Callable[
-            Concatenate[InputProtocol, SharedCore, StateSpecificData, P],
-            tuple[R, OtherStateSpecificData],
-        ]:
+            decoratee: Callable[Concatenate[InputProtocol, Core, Data, P], R]
+        ) -> Callable[Concatenate[InputProtocol, Core, Data, P], R]:
+            # FIXME: actually register transition
             return decoratee
 
         return decorator
 
-    def stateful_transition(
+    def data_transition(
         self,
         input_method: Callable[Concatenate[InputProtocol, P], R],
-        new_state: AnyState,
-    ) -> Callable[
-        [Callable[Concatenate[InputProtocol, SharedCore, StateSpecificData, P], R]],
-        Callable[Concatenate[InputProtocol, SharedCore, StateSpecificData, P], R],
-    ]:
+        new_state: TypifiedDataState[InputProtocol, Core, OtherData],
+    ) -> Decorator[Concatenate[InputProtocol, Core, Data, P], tuple[R, OtherData]]:
         def decorator(
             decoratee: Callable[
-                Concatenate[InputProtocol, SharedCore, StateSpecificData, P], R
+                Concatenate[InputProtocol, Core, Data, P], tuple[R, OtherData]
             ]
-        ) -> Callable[Concatenate[InputProtocol, SharedCore, StateSpecificData, P], R]:
+        ) -> Callable[Concatenate[InputProtocol, Core, Data, P], tuple[R, OtherData]]:
             # FIXME: actually register transition
             return decoratee
 
         return decorator
 
 
-AnyState = (
-    TypifiedState[InputProtocol, SharedCore]
-    | TypifiedStatefulState[InputProtocol, SharedCore, Any, ...]
-)
-
-
 @dataclass
-class _TypicalBase(Generic[SharedCore]):
-    _core: SharedCore
-    _transitioner: Transitioner
-    _state_specific_data: object | None = None
+class _TypicalBase(Generic[Core]):
+    __automat_core__: Core
+    __automat_transitioner__: Transitioner
+    __automat_methods__: dict[str, dict[str, Callable[..., Any]]]
+    __automat_data__: object | None = None
+
 
 @dataclass
 class NoDataTransition:
     input_name: str
-    from_state: AnyState
-    to_state: AnyState
+    implementation: Callable[..., object]
+
 
 @dataclass
-class DataTransition(Generic[StateSpecificData]):
+class DataTransition(Generic[Data]):
+    """
+    A transition I{to} a state that constructs.
+    """
+
     input_name: str
-    from_state: AnyState
-    to_state: TypifiedStatefulState
-    factory: Callable[[]]
+    implementation: Callable[..., tuple[object, Data]]
+
+
+def implement_method(
+    method: Callable[..., object], requires_data: bool, produces_data: bool
+) -> Callable[..., object]:
+    method_name = method.__name__
+
+    def implementation(
+        self: _TypicalBase, /, *args: object, **kwargs: object
+    ) -> object:
+        transitioner = self.__automat_transitioner__
+        [[impl_method], tracer] = transitioner.transition(method_name)
+        if requires_data:
+            args = (self.__automat_data__, *args)
+        result: Any = impl_method(self, self.__automat_core__, *args, **kwargs)
+        if produces_data:
+            result, self.__automat_data__ = result
+        return result
+
+    return implementation
+
 
 @dataclass
-class TypifiedBuilder(Generic[InputProtocol, SharedCore]):
+class TypifiedBuilder(Generic[InputProtocol, Core]):
     protocol: ProtocolAtRuntime[InputProtocol]
-    core_type: type[SharedCore]
+    core_type: type[Core]
 
     _no_data_transitions: list[NoDataTransition] = field(default_factory=list)
     _data_transitions: list[DataTransition] = field(default_factory=list)
 
-    def state(self, name: str) -> TypifiedState[InputProtocol, SharedCore]:
+    def state(self, name: str) -> TypifiedState[InputProtocol, Core]:
         return TypifiedState(name, self)
 
-    def stateful_state(
-        self,
-        name: str,
-        data_type: type[StateSpecificData],
-        factory: Callable[P, StateSpecificData],
-    ) -> TypifiedStatefulState[InputProtocol, SharedCore, StateSpecificData, P]:
-        return TypifiedStatefulState(name, self, factory)
+    def data_state(
+        self, name: str, data_type: type[Data]
+    ) -> TypifiedDataState[InputProtocol, Core, Data]:
+        return TypifiedDataState(name, self)
 
-    def build(self) -> Callable[[SharedCore], InputProtocol]:
+    def build(self) -> Callable[[Core], InputProtocol]:
         namespace: dict[str, str] = {}
         runtime_type = type(
             f"Typified<{runtime_name(self.protocol)}>",

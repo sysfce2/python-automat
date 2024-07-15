@@ -5,6 +5,7 @@ from typing import Callable, Protocol
 
 from automat import TypifiedBuilder
 
+
 @dataclass
 class Beans:
     description: str
@@ -86,25 +87,8 @@ def _coffee_machine() -> TypifiedBuilder[_BrewerInternals, BrewCore]:
     # reveal_type(builder)
     not_ready = builder.state("HaveBeans")
 
-    def build_ready(
-        brewer: _BrewerInternals,
-        core: BrewCore,
-        beans: Beans,
-        water: Water,
-        carafe: Carafe,
-    ) -> Ready:
-        return Ready(beans, water, carafe)
-
-    def build_mixture(
-        brewer: _BrewerInternals,
-        core: BrewCore,
-    ) -> Mixture:
-        raise NotImplementedError(
-            "mixture must be conveyed by return value, we can't build it"
-        )
-
-    ready = builder.stateful_state("Ready", Ready, build_ready)
-    brewing = builder.stateful_state("Brewing", Mixture, build_mixture)
+    ready = builder.data_state("Ready", Ready)
+    brewing = builder.data_state("Brewing", Mixture)
 
     def ready_check(brewer: _BrewerInternals, core: BrewCore) -> None:
         if (
@@ -130,43 +114,41 @@ def _coffee_machine() -> TypifiedBuilder[_BrewerInternals, BrewCore]:
         core.carafe = carafe
         ready_check(brewer, core)
 
-    @not_ready.transition(_BrewerInternals._ready, ready)
+    @not_ready.data_transition(_BrewerInternals._ready, ready)
     def get_ready(
         brewer: _BrewerInternals,
         core: BrewCore,
         beans: Beans,
         water: Water,
         carafe: Carafe,
-    ) -> None:
-        ...
+    ) -> tuple[None, Ready]:
+        return (None, Ready(beans, water, carafe))
 
     # all transitions into this state should invoke this at some point in the
     # transition; after or before the main function?
-    @ready.stateful_setup()
+    @ready.data_setup()
     def ready_now(brewer: _BrewerInternals, core: BrewCore, ready: Ready) -> None:
         core.ready_light.on = True
 
     # all transitions out should invoke this
-    @ready.stateful_cleanup()
+    @ready.data_cleanup()
     def not_ready_anymore(
         brewer: _BrewerInternals, core: BrewCore, ready: Ready
     ) -> None:
         core.ready_light.on = False
 
-    @ready.stateful_convey(Brewer.brew_button, brewing)
-    def brew(
-        brewer: _BrewerInternals, core: BrewCore, ready: Ready
-    ) -> tuple[
+    @ready.data_transition(Brewer.brew_button, brewing)
+    def brew(brewer: _BrewerInternals, core: BrewCore, ready: Ready) -> tuple[
         # it's a tuple because we have to convey the result of
         # brew_button(None) as well as the required state for the 'brewing'
-        # stateful state(Mixture)
+        # data state(Mixture)
         None,
         Mixture,
     ]:
         core.brew_light.on = True
         return (None, ready.brew())
 
-    @brewing.stateful_transition(_BrewerInternals.wait_a_while, not_ready)
+    @brewing.transition(_BrewerInternals.wait_a_while, not_ready)
     def brewed(brewer: _BrewerInternals, core: BrewCore, mixture: Mixture) -> Mixture:
         core.brew_light.on = False
         return mixture

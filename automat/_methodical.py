@@ -3,15 +3,14 @@ from __future__ import annotations
 
 import collections
 from functools import wraps
-from itertools import count
-
 from inspect import getfullargspec as getArgsSpec
+from itertools import count
+from typing import Callable, Iterable, TypeAlias, TypeVar
 
 import attr
 
-from ._core import Transitioner, Automaton
+from ._core import Automaton, OutputTracer, Tracer, Transitioner
 from ._introspection import preserveName
-
 
 ArgSpec = collections.namedtuple(
     "ArgSpec",
@@ -140,7 +139,11 @@ class MethodicalState(object):
         return self.method.__name__
 
 
-def _transitionerFromInstance(oself, symbol, automaton):
+def _transitionerFromInstance(
+    oself: object,
+    symbol: str,
+    automaton: Automaton[MethodicalState, MethodicalInput, MethodicalOutput],
+) -> Transitioner[MethodicalState, MethodicalInput, MethodicalOutput]:
     """
     Get a L{Transitioner}
     """
@@ -219,23 +222,32 @@ def _filterArgs(args, kwargs, inputSpec, outputSpec):
     return return_args, return_kwargs
 
 
+T = TypeVar("T")
+R = TypeVar("R")
+
+
 @attr.s(eq=False, hash=False)
 class MethodicalInput(object):
     """
     An input for a L{MethodicalMachine}.
     """
 
-    automaton = attr.ib(repr=False)
+    automaton: Automaton[MethodicalState, MethodicalInput, MethodicalOutput] = attr.ib(
+        repr=False
+    )
     method = attr.ib(validator=assertNoCode)
     symbol = attr.ib(repr=False)
-    collectors: dict[object, object] = attr.ib(default=attr.Factory(dict), repr=False)
+    collectors: dict[MethodicalState, Callable[[Iterable[T]], R]] = attr.ib(
+        default=attr.Factory(dict), repr=False
+    )
+
     argSpec = attr.ib(init=False, repr=False)
 
     @argSpec.default
     def _buildArgSpec(self):
         return _getArgSpec(self.method)
 
-    def __get__(self, oself, type=None):
+    def __get__(self, oself: object, type: None = None) -> object:
         """
         Return a function that takes no arguments and returns values returned
         by output functions produced by the given L{MethodicalInput} in
@@ -245,15 +257,15 @@ class MethodicalInput(object):
 
         @preserveName(self.method)
         @wraps(self.method)
-        def doInput(*args, **kwargs):
+        def doInput(*args: object, **kwargs: object) -> object:
             self.method(oself, *args, **kwargs)
             previousState = transitioner._state
             (outputs, outTracer) = transitioner.transition(self)
             collector = self.collectors[previousState]
             values = []
             for output in outputs:
-                if outTracer:
-                    outTracer(output._name())
+                if outTracer is not None:
+                    outTracer(output)
                 a, k = _filterArgs(args, kwargs, self.argSpec, output.argSpec)
                 value = output(oself, *a, **k)
                 values.append(value)
@@ -261,7 +273,7 @@ class MethodicalInput(object):
 
         return doInput
 
-    def _name(self):
+    def _name(self) -> str:
         return self.method.__name__
 
 
@@ -296,20 +308,47 @@ class MethodicalOutput(object):
         """
         return self.method(oself, *args, **kwargs)
 
-    def _name(self):
+    def _name(self) -> str:
         return self.method.__name__
+
+
+StringOutputTracer = Callable[[str], None]
+StringTracer: TypeAlias = "Callable[[str, str, str], StringOutputTracer | None]"
+
+
+def wrapTracer(
+    wrapped: StringTracer | None,
+) -> Tracer[MethodicalState, MethodicalInput, MethodicalOutput] | None:
+    if wrapped is None:
+        return None
+
+    def tracer(
+        state: MethodicalState,
+        input: MethodicalInput,
+        output: MethodicalState,
+    ) -> OutputTracer[MethodicalOutput] | None:
+        result = wrapped(state._name(), input._name(), output._name())
+        if result is not None:
+            return lambda out: result(out._name())
+        return None
+
+    return tracer
 
 
 @attr.s(eq=False, hash=False)
 class MethodicalTracer(object):
-    automaton = attr.ib(repr=False)
-    symbol = attr.ib(repr=False)
+    automaton: Automaton[MethodicalState, MethodicalInput, MethodicalOutput] = attr.ib(
+        repr=False
+    )
+    symbol: str = attr.ib(repr=False)
 
-    def __get__(self, oself, type=None):
+    def __get__(
+        self, oself: object, type: object = None
+    ) -> Callable[[StringTracer], None]:
         transitioner = _transitionerFromInstance(oself, self.symbol, self.automaton)
 
-        def setTrace(tracer):
-            transitioner.setTrace(tracer)
+        def setTrace(tracer: StringTracer | None) -> None:
+            transitioner.setTrace(wrapTracer(tracer))
 
         return setTrace
 
@@ -469,7 +508,7 @@ class MethodicalMachine(object):
         return decorator
 
     @property
-    def _setTrace(self):
+    def _setTrace(self) -> MethodicalTracer:
         return MethodicalTracer(self._automaton, self._symbol)
 
     def asDigraph(self):

@@ -52,7 +52,7 @@ def tableMaker(
         _E("font", inputLabel, face="menlo-italic"),
         color="purple",
         port=port,
-        **colspan
+        **colspan,
     )
 
     pointSize = {"point-size": "9"}
@@ -127,7 +127,7 @@ def tool(
     _argv: list[str] = sys.argv[1:],
     _syspath: list[str] = sys.path,
     _findMachines: Callable[
-        [str], Iterator[tuple[str, MethodicalMachine|_TypicalClass]]
+        [str], Iterator[tuple[str, MethodicalMachine | _TypicalClass]]
     ] = findMachines,
     _print: Callable[..., None] = print,
 ):

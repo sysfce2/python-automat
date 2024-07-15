@@ -5,8 +5,15 @@ A core state-machine abstraction.
 
 Perhaps something that could be replaced with or integrated into machinist.
 """
-
+from __future__ import annotations
+import sys
 from itertools import chain
+from typing import Generic, Sequence, TypeVar, Callable
+
+if sys.version_info >= (3, 10):
+    from typing import TypeAlias
+else:
+    from typing_extensions import TypeAlias
 
 _NO_STATE = "<no state>"
 
@@ -29,19 +36,27 @@ class NoTransition(Exception):
         )
 
 
-class Automaton(object):
+State = TypeVar("State")
+Input = TypeVar("Input")
+Output = TypeVar("Output")
+
+
+class Automaton(Generic[State, Input, Output]):
     """
     A declaration of a finite state machine.
 
     Note that this is not the machine itself; it is immutable.
     """
 
-    def __init__(self):
+    def __init__(self, initial: State | None = None) -> None:
         """
         Initialize the set of transitions and the initial state.
         """
-        self._initialState = _NO_STATE
-        self._transitions = set()
+        if initial is None:
+            initial = _NO_STATE  # type:ignore[assignment]
+        assert initial is not None
+        self._initialState: State = initial
+        self._transitions: set[tuple[State, Input, State, Sequence[Output]]] = set()
         self._unhandledTransition = None
 
     @property
@@ -65,7 +80,13 @@ class Automaton(object):
 
         self._initialState = state
 
-    def addTransition(self, inState, inputSymbol, outState, outputSymbols):
+    def addTransition(
+        self,
+        inState: State,
+        inputSymbol: Input,
+        outState: State,
+        outputSymbols: tuple[Output],
+    ):
         """
         Add the given transition to the outputSymbol. Raise ValueError if
         there is already a transition with the same inState and inputSymbol.
@@ -73,7 +94,7 @@ class Automaton(object):
         # keeping self._transitions in a flat list makes addTransition
         # O(n^2), but state machines don't tend to have hundreds of
         # transitions.
-        for (anInState, anInputSymbol, anOutState, _) in self._transitions:
+        for anInState, anInputSymbol, anOutState, _ in self._transitions:
             if anInState == inState and anInputSymbol == inputSymbol:
                 raise ValueError(
                     "already have transition from {} via {}".format(
@@ -111,7 +132,7 @@ class Automaton(object):
             )
         )
 
-    def states(self):
+    def states(self) -> frozenset[State]:
         """
         All valid states; "Q" in the mathematical description of a state
         machine.
@@ -123,11 +144,13 @@ class Automaton(object):
             )
         )
 
-    def outputForInput(self, inState, inputSymbol):
+    def outputForInput(
+        self, inState: State, inputSymbol: Input
+    ) -> tuple[State, list[Output]]:
         """
         A 2-tuple of (outState, outputSymbols) for inputSymbol.
         """
-        for (anInState, anInputSymbol, outState, outputSymbols) in self._transitions:
+        for anInState, anInputSymbol, outState, outputSymbols in self._transitions:
             if (inState, inputSymbol) == (anInState, anInputSymbol):
                 return (outState, list(outputSymbols))
         if self._unhandledTransition is None:
@@ -135,20 +158,26 @@ class Automaton(object):
         return self._unhandledTransition
 
 
-class Transitioner(object):
+OutputTracer = Callable[[Output], None]
+Tracer: TypeAlias = "Callable[[State, Input, State], OutputTracer[Output] | None]"
+
+
+class Transitioner(Generic[State, Input, Output]):
     """
     The combination of a current state and an L{Automaton}.
     """
 
-    def __init__(self, automaton, initialState):
-        self._automaton = automaton
-        self._state = initialState
-        self._tracer = None
+    def __init__(self, automaton: Automaton[State, Input, Output], initialState: State):
+        self._automaton: Automaton[State, Input, Output] = automaton
+        self._state: State = initialState
+        self._tracer: Tracer[State, Input, Output] | None = None
 
-    def setTrace(self, tracer):
+    def setTrace(self, tracer: Tracer[State, Input, Output] | None) -> None:
         self._tracer = tracer
 
-    def transition(self, inputSymbol):
+    def transition(
+        self, inputSymbol: Input
+    ) -> tuple[Sequence[Output], OutputTracer[Output] | None]:
         """
         Transition between states, returning any outputs.
         """
@@ -157,8 +186,6 @@ class Transitioner(object):
         )
         outTracer = None
         if self._tracer:
-            outTracer = self._tracer(
-                self._state._name(), inputSymbol._name(), outState._name()
-            )
+            outTracer = self._tracer(self._state, inputSymbol, outState)
         self._state = outState
         return (outputSymbols, outTracer)

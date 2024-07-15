@@ -140,6 +140,7 @@ builder: TypicalBuilder[SomeInputs, SharedCore, []] = TypicalBuilder(
     SomeInputs, SharedCore
 )
 
+
 # TODO: right now this must be module-scope because type annotations get
 # evaluated in global scope, but we could capture scopes in .state() and
 # .handle()
@@ -185,18 +186,15 @@ class FirstState(object):
         return param1
 
     @builder.handle(SomeInputs.ephemeral, enter=lambda: Ephemeral)
-    def ephemeral(self) -> None:
-        ...
+    def ephemeral(self) -> None: ...
 
     @builder.handle(SomeInputs.special, enter=lambda: RequiresSpecial)
-    def special(self, something: SomethingSpecial) -> None:
-        ...
+    def special(self, something: SomethingSpecial) -> None: ...
 
     @builder.handle(
         SomeInputs.special_ephemeral, enter=lambda: RequiresSpecialEphemeral
     )
-    def special_ephemeral(self, something: SomethingSpecial) -> None:
-        ...
+    def special_ephemeral(self, something: SomethingSpecial) -> None: ...
 
     @builder.handle(SomeInputs.outside, enter=lambda: RequiresOutside)
     def outside(self) -> None:

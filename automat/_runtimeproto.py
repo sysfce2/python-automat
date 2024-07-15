@@ -3,6 +3,8 @@ Workaround for U{the lack of TypeForm
 <https://github.com/python/mypy/issues/9773>}.
 """
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Callable, Protocol, TypeVar
 
 T = TypeVar("T")
