@@ -182,7 +182,7 @@ class DataTransition(Generic[Data]):
 
 
 def implement_method(
-    method: Callable[..., object], requires_data: bool, produces_data: bool
+    method: Callable[..., object],
 ) -> Callable[..., object]:
 
     method_input = method.__name__
@@ -192,14 +192,30 @@ def implement_method(
     ) -> object:
         transitioner = self.__automat_transitioner__
         [[impl_method], tracer] = transitioner.transition(method_input)
+        result: Any = impl_method(self, *args, **kwargs)
+        return result
+
+    return implementation
+
+
+def implify(
+    method: Callable[..., Any], requires_data: bool, produces_data: bool
+) -> Callable[..., object]:
+
+    def theimpl(self: TypifiedBase[Core], /, *args: object, **kwargs: object) -> object:
+        extra_args = [self, self.__automat_core__]
         if requires_data:
-            args = (self.__automat_data__, *args)
-        result: Any = impl_method(self, self.__automat_core__, *args, **kwargs)
+            extra_args += [self.__automat_data__]
+        # if anything is invoked reentrantly here, then we can't possibly have
+        # set __automat_data__ and the data argument to the reentrant method
+        # will be wrong.  we *need* to split out the construction / state-enter
+        # hook, because it needs to run separately. 
+        result = method(*extra_args, *args, **kwargs)
         if produces_data:
             result, self.__automat_data__ = result
         return result
 
-    return implementation
+    return theimpl
 
 
 @dataclass(eq=False)
@@ -213,7 +229,6 @@ class TypifiedBuilder(Generic[InputProtocol, Core]):
         TypifiedState | TypifiedDataState, str, Callable[..., object]
     ] = field(default_factory=Automaton)
     _initial: bool = True
-    _methods: dict[str, Callable[..., object]] = field(default_factory=dict)
 
     def state(self, name: str) -> TypifiedState[InputProtocol, Core]:
         state = TypifiedState(name, self)
@@ -227,7 +242,6 @@ class TypifiedBuilder(Generic[InputProtocol, Core]):
     ) -> TypifiedDataState[InputProtocol, Core, Data]:
         assert not self._initial, "initial state cannot require state-specific data"
         return TypifiedDataState(name, self)
-
 
     def _register(
         self,
@@ -250,16 +264,30 @@ class TypifiedBuilder(Generic[InputProtocol, Core]):
         requires_data: bool,
         produces_data: bool,
     ) -> None:
-        self.automaton.addTransition(old, input.__name__, new, tuple([impl]))
-        self._methods[input.__name__] = implement_method(
-            input, requires_data, produces_data
+        print(f"REGISTER {impl=}, {requires_data=}, {produces_data=}")
+        self.automaton.addTransition(
+            old,
+            input.__name__,
+            new,
+            tuple(
+                [
+                    implify(
+                        impl, requires_data=requires_data, produces_data=produces_data
+                    )
+                ]
+            ),
         )
 
     def build(self) -> Callable[[Core], InputProtocol]:
+        namespace = {
+            method_name: implement_method(getattr(self.protocol, method_name))
+            for method_name in actuallyDefinedProtocolMethods(self.protocol)
+        }
+
         runtime_type: type[TypifiedBase[Core]] = type(
             f"Typified<{runtime_name(self.protocol)}>",
             tuple([TypifiedBase]),
-            self._methods,
+            namespace,
         )
 
         def create(core: Core) -> InputProtocol:
