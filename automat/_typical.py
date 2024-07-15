@@ -28,6 +28,11 @@ from typing import (
 )
 
 from ._core import Automaton, Transitioner
+from ._runtimeproto import (
+    ProtocolAtRuntime,
+    runtime_name,
+    actuallyDefinedProtocolMethods,
+)
 
 SelfCon = TypeVar("SelfCon", contravariant=True)
 InputsProtoInv = TypeVar("InputsProtoInv")
@@ -68,16 +73,6 @@ class Enter(Generic[T]):
     """
 
     state: type[T]
-
-
-class ProtocolAtRuntime(Protocol[InputsProto]):
-    # __name__: str # https://github.com/python/mypy/issues/12976
-    def __call__(self) -> InputsProto:
-        ...
-
-
-def _name(x: ProtocolAtRuntime[T]) -> str:
-    return x.__name__  # type:ignore[attr-defined]
 
 
 class CouldNotFindAutoParam(RuntimeError):
@@ -651,31 +646,6 @@ def _stateOutputs(
         )
 
 
-class _SampleProtocol(Protocol):
-    pass
-
-
-from inspect import getmembers, isfunction
-
-emptyProtocolMethods = frozenset(
-    name for name, each in getmembers(_SampleProtocol, isfunction)
-)
-
-
-def actuallyDefinedProtocolMethods(protocol: object) -> frozenset[str]:
-    """
-    Attempt to ignore implementation details, and get all the methods that the
-    protocol actually defines.
-
-    that includes locally defined methods and also those defined in inherited
-    superclasses.
-    """
-    return (
-        frozenset(name for name, each in getmembers(protocol, isfunction))
-        - emptyProtocolMethods
-    )
-
-
 @dataclass
 class TypicalBuilder(Generic[InputsProto, SharedCore, P]):
     """
@@ -781,7 +751,7 @@ class TypicalBuilder(Generic[InputsProto, SharedCore, P]):
             self._stateClasses[0],
             automaton,
             type(
-                f"Machine<{_name(self._stateProtocol)}>",
+                f"Machine<{runtime_name(self._stateProtocol)}>",
                 tuple([_TypicalInstance]),
                 {
                     **ns,

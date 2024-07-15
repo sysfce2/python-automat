@@ -1,7 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Concatenate, Generic, ParamSpec, TypeVar
+
+from ._core import Automaton, Transitioner
+from ._runtimeproto import (
+    ProtocolAtRuntime,
+    actuallyDefinedProtocolMethods,
+    runtime_name,
+)
 
 InputProtocol = TypeVar("InputProtocol")
 InputProtoSelf = TypeVar("InputProtoSelf")
@@ -130,8 +137,31 @@ AnyState = (
 
 
 @dataclass
+class _TypicalBase(Generic[SharedCore]):
+    _core: SharedCore
+    _transitioner: Transitioner
+    _state_specific_data: object | None = None
+
+@dataclass
+class NoDataTransition:
+    input_name: str
+    from_state: AnyState
+    to_state: AnyState
+
+@dataclass
+class DataTransition(Generic[StateSpecificData]):
+    input_name: str
+    from_state: AnyState
+    to_state: TypifiedStatefulState
+    factory: Callable[[]]
+
+@dataclass
 class TypifiedBuilder(Generic[InputProtocol, SharedCore]):
+    protocol: ProtocolAtRuntime[InputProtocol]
     core_type: type[SharedCore]
+
+    _no_data_transitions: list[NoDataTransition] = field(default_factory=list)
+    _data_transitions: list[DataTransition] = field(default_factory=list)
 
     def state(self, name: str) -> TypifiedState[InputProtocol, SharedCore]:
         return TypifiedState(name, self)
@@ -145,5 +175,10 @@ class TypifiedBuilder(Generic[InputProtocol, SharedCore]):
         return TypifiedStatefulState(name, self, factory)
 
     def build(self) -> Callable[[SharedCore], InputProtocol]:
-        # FIXME: obviously
-        return None             # type:ignore[return-value]
+        namespace: dict[str, str] = {}
+        runtime_type = type(
+            f"Typified<{runtime_name(self.protocol)}>",
+            tuple([_TypicalBase]),
+            namespace,
+        )
+        return runtime_type

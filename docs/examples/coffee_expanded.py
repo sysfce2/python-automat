@@ -1,9 +1,9 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Callable, Protocol
 
 from automat import TypifiedBuilder
-
 
 @dataclass
 class Beans:
@@ -82,7 +82,8 @@ def _coffee_machine() -> TypifiedBuilder[_BrewerInternals, BrewCore]:
     need to call each other, so they don't need to be defined globally.  Use a
     function scope to avoid littering a module with states and such.
     """
-    builder: TypifiedBuilder[_BrewerInternals, BrewCore] = TypifiedBuilder(BrewCore)
+    builder = TypifiedBuilder(_BrewerInternals, BrewCore)
+    # reveal_type(builder)
     not_ready = builder.state("HaveBeans")
 
     def build_ready(
@@ -175,8 +176,8 @@ def _coffee_machine() -> TypifiedBuilder[_BrewerInternals, BrewCore]:
 
 CoffeeMachine: Callable[[BrewCore], Brewer] = _coffee_machine().build()
 
-if __name__ == '__main__':
-    machine = CoffeeMachine(core:=BrewCore(Light(), Light()))
+if __name__ == "__main__":
+    machine = CoffeeMachine(core := BrewCore(Light(), Light()))
     machine.put_in_beans(Beans("light roast"))
     machine.put_in_water(Water())
     machine.put_in_carafe(Carafe())
