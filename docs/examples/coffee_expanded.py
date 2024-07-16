@@ -98,8 +98,12 @@ def _coffee_machine() -> TypifiedBuilder[_BrewerInternals, BrewCore]:
         return Ready(beans, water, carafe)
 
     def mixture_factory(brewer: _BrewerInternals, core: BrewCore) -> Mixture:
-        assert core.brewing is not None, "Should always be set by 'brew'"
-        return core.brewing
+        # we already do have a 'ready' but it's state-specific data which makes
+        # it really annoying to relay on to the *next* state without passing it
+        # through the state core.  requiring the factory to take SSD inherently
+        # means that it could only work with transitions away from a single
+        # state, which would not be helpful, although that *is* what we want here.
+        return None             # type:ignore[return-value]
 
     ready = builder.data_state("Ready", ready_factory)
     brewing = builder.data_state("Brewing", mixture_factory)
