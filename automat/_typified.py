@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass, field
+from functools import wraps
 from typing import Any, Callable, Generic, TypeVar, overload
 
 if sys.version_info < (3, 10):
@@ -122,7 +123,7 @@ class TypifiedDataState(Generic[InputProtocol, Core, Data, FactoryParams]):
                 new=new_state,
                 impl=decoratee,
                 input=input_method,
-                requires_data=False,
+                requires_data=True,
             )
             return decoratee
 
@@ -199,6 +200,7 @@ def implement_method(
     ) -> object:
         transitioner = self.__automat_transitioner__
         [outputs, tracer] = transitioner.transition(method_input)
+        print(f"{outputs=}")
         result: Any = None
         for output in outputs:
             # here's the idea: there will be a state-setup output and a
@@ -208,8 +210,10 @@ def implement_method(
             # that state, the protocol is in a self-consistent state and can
             # run reentrant outputs.  not clear that state-teardown outputs are
             # necessary
+            print(f"invoking {output=}")
             result = output(self, result, *args, **kwargs)
         return result
+    implementation.__qualname__ = implementation.__name__ = f"<implementation for {method}>"
 
     return implementation
 
@@ -245,6 +249,8 @@ def create_transition_output(
         # hook, because it needs to run separately.
         return method(*extra_args, *args, **kwargs)
 
+    theimpl.__qualname__ = theimpl.__name__ = f"<transition output for {method}>"
+
     return theimpl
 
 
@@ -275,9 +281,11 @@ def implement_data_factory(data_factory: Callable[..., Data]) -> Callable[..., D
         *args: object,
         **kwargs: object,
     ) -> Data:
-        new_data = data_factory(self, *args, **kwargs)
+        print(f"DI: {data_factory=} {args=} {kwargs=}")
+        new_data = data_factory(self, self.__automat_core__, *args, **kwargs)
         self.__automat_data__ = new_data
         return new_data
+    dataimpl.__qualname__ = dataimpl.__name__ = f"<data factory for {data_factory}>"
 
     return dataimpl
 
@@ -353,6 +361,8 @@ class TypifiedBuilder(Generic[InputProtocol, Core]):
         constructing a data object.
         """
         impls: list[Callable[..., object]] = []
+        # Either way, we still need to run the actual implementation
+        impls.append(create_transition_output(impl, requires_data=requires_data))
         if old is new:
             # If this transition is in the same state that we were in
             # previously, then __automat_data__ should still be the same, let's
@@ -361,8 +371,6 @@ class TypifiedBuilder(Generic[InputProtocol, Core]):
         else:
             # Otherwise, let's construct a new one.
             impls.append(implement_data_factory(new.factory))
-        # Either way, we still need to run the actual implementation
-        impls.append(create_transition_output(impl, requires_data=requires_data))
         self.automaton.addTransition(
             old,
             input.__name__,

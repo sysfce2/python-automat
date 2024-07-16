@@ -98,7 +98,7 @@ def _coffee_machine() -> TypifiedBuilder[_BrewerInternals, BrewCore]:
         return Ready(beans, water, carafe)
 
     def mixture_factory(brewer: _BrewerInternals, core: BrewCore) -> Mixture:
-        assert core.brewing is not None, "Should always be set by"
+        assert core.brewing is not None, "Should always be set by 'brew'"
         return core.brewing
 
     ready = builder.data_state("Ready", ready_factory)
@@ -136,7 +136,7 @@ def _coffee_machine() -> TypifiedBuilder[_BrewerInternals, BrewCore]:
         water: Water,
         carafe: Carafe,
     ) -> None:
-        return None
+        print("ready output")
 
     # all transitions into this state should invoke this at some point in the
     # transition; after or before the main function?
@@ -154,6 +154,7 @@ def _coffee_machine() -> TypifiedBuilder[_BrewerInternals, BrewCore]:
     @ready.data_transition(Brewer.brew_button, brewing)
     def brew(brewer: _BrewerInternals, core: BrewCore, ready: Ready) -> None:
         core.brew_light.on = True
+        print("BREW CALLED")
         core.brewing = ready.brew()
 
     @brewing.transition(_BrewerInternals.wait_a_while, not_ready)
