@@ -416,6 +416,9 @@ def _bindableInputMethod(
         )
         if newStateName != oldStateName and not shouldStatePersist:
             del self._stateCluster[oldStateName]
+        # is this approach even workable?  i.e. what happens if this
+        # re-entrantly calls an input method which requires the state to have
+        # already been set up?
         if stateEnter is not None:
             stateEnter()
         result = realMethod(*a, **kw)
@@ -668,7 +671,7 @@ class TypicalBuilder(Generic[InputsProto, SharedCore, P]):
         if self._built:
             raise RuntimeError("You can only build once, after that use the class")
         self._built = True
-        automaton = Automaton()
+        automaton: Automaton[str, str, str] = Automaton()
         automaton.unhandledTransition(self._errorState.__name__, [None])
         stateFactories: Dict[str, Callable[..., UserStateType]] = {}
         allProtocols = frozenset([self._stateProtocol, *self._privateProtocols])
@@ -694,7 +697,7 @@ class TypicalBuilder(Generic[InputsProto, SharedCore, P]):
                     output = getattr(stateClass, outputName)
                     if inputName in possibleInputs:
                         automaton.addTransition(
-                            stateName, inputName, newStateName, [outputName]
+                            stateName, inputName, newStateName, tuple([outputName])
                         )
                         buildAfterFactories.append(
                             (output, sharedCoreType, stateClass, newStateFactory)

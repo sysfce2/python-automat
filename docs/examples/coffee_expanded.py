@@ -85,10 +85,24 @@ def _coffee_machine() -> TypifiedBuilder[_BrewerInternals, BrewCore]:
     """
     builder = TypifiedBuilder(_BrewerInternals, BrewCore)
     # reveal_type(builder)
+
     not_ready = builder.state("HaveBeans")
 
-    ready = builder.data_state("Ready", Ready)
-    brewing = builder.data_state("Brewing", Mixture)
+    def ready_factory(
+        brewer: _BrewerInternals,
+        core: BrewCore,
+        beans: Beans,
+        water: Water,
+        carafe: Carafe,
+    ) -> Ready:
+        return Ready(beans, water, carafe)
+
+    def mixture_factory(brewer: _BrewerInternals, core: BrewCore) -> Mixture:
+        assert core.brewing is not None, "Should always be set by"
+        return core.brewing
+
+    ready = builder.data_state("Ready", ready_factory)
+    brewing = builder.data_state("Brewing", mixture_factory)
 
     def ready_check(brewer: _BrewerInternals, core: BrewCore) -> None:
         if (
@@ -121,8 +135,8 @@ def _coffee_machine() -> TypifiedBuilder[_BrewerInternals, BrewCore]:
         beans: Beans,
         water: Water,
         carafe: Carafe,
-    ) -> tuple[None, Ready]:
-        return (None, Ready(beans, water, carafe))
+    ) -> None:
+        return None
 
     # all transitions into this state should invoke this at some point in the
     # transition; after or before the main function?
@@ -138,15 +152,9 @@ def _coffee_machine() -> TypifiedBuilder[_BrewerInternals, BrewCore]:
         core.ready_light.on = False
 
     @ready.data_transition(Brewer.brew_button, brewing)
-    def brew(brewer: _BrewerInternals, core: BrewCore, ready: Ready) -> tuple[
-        # it's a tuple because we have to convey the result of
-        # brew_button(None) as well as the required state for the 'brewing'
-        # data state(Mixture)
-        None,
-        Mixture,
-    ]:
+    def brew(brewer: _BrewerInternals, core: BrewCore, ready: Ready) -> None:
         core.brew_light.on = True
-        return (None, ready.brew())
+        core.brewing = ready.brew()
 
     @brewing.transition(_BrewerInternals.wait_a_while, not_ready)
     def brewed(brewer: _BrewerInternals, core: BrewCore, mixture: Mixture) -> Mixture:
