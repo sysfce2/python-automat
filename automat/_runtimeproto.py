@@ -44,6 +44,16 @@ def actuallyDefinedProtocolMethods(protocol: object) -> frozenset[str]:
     )
 
 
+def _fixAnnotation(method: Callable[..., object], it: object, ann: str) -> None:
+    annotation = getattr(it, ann)
+    if isinstance(annotation, str):
+        scope = getattr(method, "__globals__", None)
+        if scope is None:
+            module = sys.modules[method.__module__]
+            scope = module.__dict__
+        setattr(it, ann, eval(annotation, scope))  # type:ignore
+
+
 def _liveSignature(method: Callable[..., object]) -> Signature:
     """
     Get a signature with evaluated annotations.
@@ -51,13 +61,8 @@ def _liveSignature(method: Callable[..., object]) -> Signature:
     # TODO: could this be replaced with get_type_hints?
     result = signature(method)
     for param in result.parameters.values():
-        annotation = param.annotation
-        if isinstance(annotation, str):
-            scope = getattr(method, "__globals__", None)
-            if scope is None:
-                module = sys.modules[method.__module__]
-                scope = module.__dict__
-            param._annotation = eval(annotation, scope)  # type:ignore
+        _fixAnnotation(method, param, "_annotation")
+    _fixAnnotation(method, result, "_return_annotation")
     return result
 
 

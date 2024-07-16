@@ -19,7 +19,6 @@ from ._runtimeproto import (
 )
 
 InputProtocol = TypeVar("InputProtocol")
-InputProtoSelf = TypeVar("InputProtoSelf")
 Core = TypeVar("Core")
 Data = TypeVar("Data")
 P = ParamSpec("P")
@@ -57,11 +56,14 @@ class TypifiedState(Generic[InputProtocol, Core]):
 
     def data_transition(
         self,
-        input_method: Callable[Concatenate[InputProtocol, FactoryParams], R],
+        input_method: Callable[Concatenate[InputProtocol, OtherFactoryParams], R],
         new_state: TypifiedDataState[
             InputProtocol, Core, OtherData, OtherFactoryParams
         ],
-    ) -> Decorator[Concatenate[InputProtocol, Core, OtherFactoryParams], R]:
+    ) -> Callable[
+        [Callable[Concatenate[InputProtocol, Core, OtherFactoryParams], R]],
+        Callable[Concatenate[InputProtocol, Core, OtherFactoryParams], R],
+    ]:
         def decorator(
             decoratee: Callable[Concatenate[InputProtocol, Core, OtherFactoryParams], R]
         ) -> Callable[Concatenate[InputProtocol, Core, OtherFactoryParams], R]:
@@ -147,13 +149,28 @@ class TypifiedDataState(Generic[InputProtocol, Core, Data, FactoryParams]):
 
         return decorator
 
+    def infer_pls(
+        self,
+        input_method: Callable[Concatenate[InputProtocol, OtherFactoryParams], R],
+        new_state: TypifiedDataState[
+            InputProtocol, Core, OtherData, OtherFactoryParams
+        ],
+    ) -> Callable[[Callable[OtherFactoryParams, R]], Callable[OtherFactoryParams, R]]:
+        def d(c: Callable[OtherFactoryParams, R]) -> Callable[OtherFactoryParams, R]:
+            return c
+
+        return d
+
     def data_transition(
         self,
         input_method: Callable[Concatenate[InputProtocol, OtherFactoryParams], R],
         new_state: TypifiedDataState[
             InputProtocol, Core, OtherData, OtherFactoryParams
         ],
-    ) -> Decorator[Concatenate[InputProtocol, Core, Data, OtherFactoryParams], R]:
+    ) -> Callable[
+        [Callable[Concatenate[InputProtocol, Core, Data, OtherFactoryParams], R]],
+        Callable[Concatenate[InputProtocol, Core, Data, OtherFactoryParams], R],
+    ]:
         def decorator(
             decoratee: Callable[
                 Concatenate[InputProtocol, Core, Data, OtherFactoryParams], R
@@ -184,6 +201,7 @@ class TypifiedBase(Generic[Core]):
     ]
     __automat_data__: object | None = None
     __automat_initializing_data__: bool = False
+    __automat_postponed__: list[Callable[[], None]] | None = None
 
 
 @dataclass
@@ -213,23 +231,56 @@ def implement_method(
 
     method_input = method.__name__
 
+    # side-effects can be re-ordered until later.  If you need to compute a
+    # value in your method, then obviously it can't be invoked reentrantly.
+    return_annotation = _liveSignature(method).return_annotation
+    is_procedure = return_annotation is None
+
     def implementation(
         self: TypifiedBase[Core], /, *args: object, **kwargs: object
     ) -> object:
         transitioner = self.__automat_transitioner__
-        [outputs, tracer] = transitioner.transition(method_input)
-        print(f"{outputs=}")
-        result: Any = None
-        for output in outputs:
-            # here's the idea: there will be a state-setup output and a
-            # state-teardown output. state-setup outputs are added to the
-            # *beginning* of any entry into a state, so that by the time you
-            # are running the *implementation* of a method that has entered
-            # that state, the protocol is in a self-consistent state and can
-            # run reentrant outputs.  not clear that state-teardown outputs are
-            # necessary
-            print(f"invoking {output=}")
-            result = output(self, result, *args, **kwargs)
+        data_at_start = self.__automat_data__
+        if self.__automat_postponed__ is not None:
+            print("POSTPONING MYSELF")
+            if not is_procedure:
+                raise RuntimeError(f"attempting to reentrantly run {method.__qualname__} but it wants to return {return_annotation!r} not None ({return_annotation is None} {is_procedure})")
+
+            def rerunme() -> None:
+                implementation(self, *args, **kwargs)
+
+            self.__automat_postponed__.append(rerunme)
+            return None
+        postponed = self.__automat_postponed__ = []
+        print(f"TRANSITION FROM {transitioner._state.name}")
+        print(f"             BY {method_input}")
+        try:
+            try:
+                [outputs, tracer] = transitioner.transition(method_input)
+            except:
+                import traceback
+
+                traceback.print_exc()
+                raise
+            print(f"             TO {transitioner._state.name}")
+            print(f"{outputs=}")
+            result: Any = None
+            for output in outputs:
+                # here's the idea: there will be a state-setup output and a
+                # state-teardown output. state-setup outputs are added to the
+                # *beginning* of any entry into a state, so that by the time you
+                # are running the *implementation* of a method that has entered
+                # that state, the protocol is in a self-consistent state and can
+                # run reentrant outputs.  not clear that state-teardown outputs are
+                # necessary
+                print(f">>>>> invoking {output=} {data_at_start=} {args=} {kwargs=}")
+                result = output(self, data_at_start, *args, **kwargs)
+                print(f"<<<<< invoked {output=}")
+        finally:
+            self.__automat_postponed__ = None
+        while postponed:
+            print(len(postponed))
+            postponed.pop(0)()
         return result
 
     implementation.__qualname__ = implementation.__name__ = (
@@ -239,7 +290,7 @@ def implement_method(
     return implementation
 
 
-def create_transition_output(
+def create_method_output(
     method: Callable[..., Any], requires_data: bool
 ) -> Callable[..., object]:
     """
@@ -250,30 +301,29 @@ def create_transition_output(
     initially.
     """
 
+    sig = _liveSignature(method)
     if requires_data:
-        sig = _liveSignature(method)
         # 0: self, 1: self.__automat_core__, 2: self.__automat_data__
         param = list(sig.parameters.values())[2]
         ann = param.annotation
 
     def theimpl(
         self: TypifiedBase[Core],
-        previous_result: object,
         /,
+        data_at_start: object,
         *args: object,
         **kwargs: object,
     ) -> object:
         extra_args = [self, self.__automat_core__]
         if requires_data:
-            if self.__automat_initializing_data__:
-                raise RuntimeError(
-                    "data factories cannot invoke their state machines reentrantly"
-                )
-            data = self.__automat_data__
+            # if self.__automat_initializing_data__:
+            #     raise RuntimeError(
+            #         f"data factories cannot invoke their state machines reentrantly {}"
+            #     )
             assert isinstance(
-                data, ann
-            ), f"expected {param=} to be {ann=} but got {type(data)=} instead"
-            extra_args += [data]
+                data_at_start, ann
+            ), f"expected {param=} to be {ann=} but got {type(data_at_start)=} instead"
+            extra_args += [data_at_start]
         # if anything is invoked reentrantly here, then we can't possibly have
         # set __automat_data__ and the data argument to the reentrant method
         # will be wrong.  we *need* to split out the construction / state-enter
@@ -285,32 +335,14 @@ def create_transition_output(
     return theimpl
 
 
-def relay_data() -> Callable[..., object]:
-    """
-    relay the data over to the next output
-    """
-
-    def relayer(
-        self: TypifiedBase[Core],
-        previous_result: object,
-        *args: object,
-        **kwargs: object,
-    ) -> object:
-        data = self.__automat_data__
-        print("RELAYYYY", data)
-        return data
-
-    return relayer
-
-
-def implement_data_factory(data_factory: Callable[..., Data]) -> Callable[..., Data]:
+def create_data_output(data_factory: Callable[..., Data]) -> Callable[..., Data]:
     """
     Construct an output for the given data objects.
     """
 
     def dataimpl(
         self: TypifiedBase[Core],
-        previous_result: object,
+        data_at_start: object,
         *args: object,
         **kwargs: object,
     ) -> Data:
@@ -326,6 +358,7 @@ def implement_data_factory(data_factory: Callable[..., Data]) -> Callable[..., D
                 import traceback
 
                 traceback.print_exc()
+                raise
             self.__automat_data__ = new_data
             print(f"DI!: {data_factory=} {args=} {kwargs=}")
             return new_data
@@ -342,7 +375,10 @@ class TypifiedBuilder(Generic[InputProtocol, Core]):
     protocol: ProtocolAtRuntime[InputProtocol]
     core_type: type[Core]
     automaton: Automaton[
-        TypifiedState | TypifiedDataState, str, Callable[..., object]
+        TypifiedState[InputProtocol, Core]
+        | TypifiedDataState[InputProtocol, Core, Any, ...],
+        str,
+        Callable[..., object],
     ] = field(default_factory=Automaton)
     _initial: bool = True
 
@@ -383,7 +419,7 @@ class TypifiedBuilder(Generic[InputProtocol, Core]):
             old,
             input.__name__,
             new,
-            tuple([create_transition_output(impl, requires_data=requires_data)]),
+            tuple([create_method_output(impl, requires_data=requires_data)]),
         )
 
     def _register_data(
@@ -409,15 +445,10 @@ class TypifiedBuilder(Generic[InputProtocol, Core]):
         """
         impls: list[Callable[..., object]] = []
         # Either way, we still need to run the actual implementation
-        impls.append(create_transition_output(impl, requires_data=requires_data))
-        if old is new:
-            # If this transition is in the same state that we were in
-            # previously, then __automat_data__ should still be the same, let's
-            # just pass it along.
-            impls.append(relay_data())
-        else:
+        if old is not new:
             # Otherwise, let's construct a new one.
-            impls.append(implement_data_factory(new.factory))
+            impls.append(create_data_output(new.factory))
+        impls.append(create_method_output(impl, requires_data=requires_data))
         self.automaton.addTransition(
             old,
             input.__name__,
