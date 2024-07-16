@@ -15,6 +15,7 @@ from ._runtimeproto import (
     ProtocolAtRuntime,
     actuallyDefinedProtocolMethods,
     runtime_name,
+    _liveSignature,
 )
 
 InputProtocol = TypeVar("InputProtocol")
@@ -129,6 +130,23 @@ class TypifiedDataState(Generic[InputProtocol, Core, Data, FactoryParams]):
 
         return decorator
 
+    def self_transition(
+        self, input_method: Callable[Concatenate[InputProtocol, P], R]
+    ) -> Decorator[Concatenate[InputProtocol, Core, Data, P], R]:
+        def decorator(
+            decoratee: Callable[Concatenate[InputProtocol, Core, Data, P], R]
+        ) -> Callable[Concatenate[InputProtocol, Core, Data, P], R]:
+            self.builder._register_data(
+                old=self,
+                new=self,
+                impl=decoratee,
+                input=input_method,
+                requires_data=True,
+            )
+            return decoratee
+
+        return decorator
+
     def data_transition(
         self,
         input_method: Callable[Concatenate[InputProtocol, OtherFactoryParams], R],
@@ -213,7 +231,10 @@ def implement_method(
             print(f"invoking {output=}")
             result = output(self, result, *args, **kwargs)
         return result
-    implementation.__qualname__ = implementation.__name__ = f"<implementation for {method}>"
+
+    implementation.__qualname__ = implementation.__name__ = (
+        f"<implementation for {method}>"
+    )
 
     return implementation
 
@@ -229,6 +250,12 @@ def create_transition_output(
     initially.
     """
 
+    if requires_data:
+        sig = _liveSignature(method)
+        # 0: self, 1: self.__automat_core__, 2: self.__automat_data__
+        param = list(sig.parameters.values())[2]
+        ann = param.annotation
+
     def theimpl(
         self: TypifiedBase[Core],
         previous_result: object,
@@ -242,7 +269,11 @@ def create_transition_output(
                 raise RuntimeError(
                     "data factories cannot invoke their state machines reentrantly"
                 )
-            extra_args += [self.__automat_data__]
+            data = self.__automat_data__
+            assert isinstance(
+                data, ann
+            ), f"expected {param=} to be {ann=} but got {type(data)=} instead"
+            extra_args += [data]
         # if anything is invoked reentrantly here, then we can't possibly have
         # set __automat_data__ and the data argument to the reentrant method
         # will be wrong.  we *need* to split out the construction / state-enter
@@ -265,7 +296,9 @@ def relay_data() -> Callable[..., object]:
         *args: object,
         **kwargs: object,
     ) -> object:
-        return self.__automat_data__
+        data = self.__automat_data__
+        print("RELAYYYY", data)
+        return data
 
     return relayer
 
@@ -281,10 +314,24 @@ def implement_data_factory(data_factory: Callable[..., Data]) -> Callable[..., D
         *args: object,
         **kwargs: object,
     ) -> Data:
-        print(f"DI: {data_factory=} {args=} {kwargs=}")
-        new_data = data_factory(self, self.__automat_core__, *args, **kwargs)
-        self.__automat_data__ = new_data
-        return new_data
+        assert (
+            not self.__automat_initializing_data__
+        ), "can't initialize while initializing"
+        self.__automat_initializing_data__ = True
+        try:
+            print(f"DI?: {data_factory=} {args=} {kwargs=}")
+            try:
+                new_data = data_factory(self, self.__automat_core__, *args, **kwargs)
+            except:
+                import traceback
+
+                traceback.print_exc()
+            self.__automat_data__ = new_data
+            print(f"DI!: {data_factory=} {args=} {kwargs=}")
+            return new_data
+        finally:
+            self.__automat_initializing_data__ = False
+
     dataimpl.__qualname__ = dataimpl.__name__ = f"<data factory for {data_factory}>"
 
     return dataimpl

@@ -5,7 +5,7 @@ import sys
 from dataclasses import dataclass, field
 from enum import Enum
 from functools import wraps
-from inspect import Parameter, Signature, signature
+from inspect import Parameter, Signature
 from typing import (
     Any,
     Callable,
@@ -32,6 +32,7 @@ from ._runtimeproto import (
     ProtocolAtRuntime,
     runtime_name,
     actuallyDefinedProtocolMethods,
+    _liveSignature,
 )
 
 SelfCon = TypeVar("SelfCon", contravariant=True)
@@ -79,23 +80,6 @@ class CouldNotFindAutoParam(RuntimeError):
     """
     Raised when an automatically-populated parameter cannot be found.
     """
-
-
-def _liveSignature(method: Callable[..., object]) -> Signature:
-    """
-    Get a signature with evaluated annotations.
-    """
-    # TODO: could this be replaced with get_type_hints?
-    result = signature(method)
-    for param in result.parameters.values():
-        annotation = param.annotation
-        if isinstance(annotation, str):
-            scope = getattr(method, "__globals__", None)
-            if scope is None:
-                module = sys.modules[method.__module__]
-                scope = module.__dict__
-            param._annotation = eval(annotation, scope)  # type:ignore
-    return result
 
 
 class ParameterBuilder(Protocol):

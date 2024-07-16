@@ -5,7 +5,11 @@ Workaround for U{the lack of TypeForm
 
 from __future__ import annotations
 
+import sys
+
 from typing import TYPE_CHECKING, Callable, Protocol, TypeVar
+
+from inspect import signature, Signature
 
 T = TypeVar("T")
 
@@ -38,3 +42,22 @@ def actuallyDefinedProtocolMethods(protocol: object) -> frozenset[str]:
         frozenset(name for name, each in getmembers(protocol, isfunction))
         - emptyProtocolMethods
     )
+
+
+def _liveSignature(method: Callable[..., object]) -> Signature:
+    """
+    Get a signature with evaluated annotations.
+    """
+    # TODO: could this be replaced with get_type_hints?
+    result = signature(method)
+    for param in result.parameters.values():
+        annotation = param.annotation
+        if isinstance(annotation, str):
+            scope = getattr(method, "__globals__", None)
+            if scope is None:
+                module = sys.modules[method.__module__]
+                scope = module.__dict__
+            param._annotation = eval(annotation, scope)  # type:ignore
+    return result
+
+
