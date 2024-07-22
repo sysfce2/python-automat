@@ -59,10 +59,7 @@ class TypifiedState(Generic[InputProtocol, Core]):
         new_state: TypifiedDataState[
             InputProtocol, Core, OtherData, OtherFactoryParams
         ],
-    ) -> Callable[
-        [Callable[Concatenate[InputProtocol, Core, OtherFactoryParams], R]],
-        Callable[Concatenate[InputProtocol, Core, OtherFactoryParams], R],
-    ]:
+    ) -> Decorator[Concatenate[InputProtocol, Core, OtherFactoryParams], R]:
         def decorator(
             decoratee: Callable[Concatenate[InputProtocol, Core, OtherFactoryParams], R]
         ) -> Callable[Concatenate[InputProtocol, Core, OtherFactoryParams], R]:
@@ -84,12 +81,7 @@ class TypifiedDataState(Generic[InputProtocol, Core, Data, FactoryParams]):
     builder: TypifiedBuilder[InputProtocol, Core]
     factory: Callable[Concatenate[InputProtocol, Core, FactoryParams], Data]
 
-    def data_setup(
-        self,
-    ) -> Callable[
-        [Callable[[InputProtocol, Core, Data], None]],
-        Callable[[InputProtocol, Core, Data], None],
-    ]:
+    def data_setup(self) -> Decorator[[InputProtocol, Core, Data], None]:
         def decorator(
             decoratee: Callable[[InputProtocol, Core, Data], None]
         ) -> Callable[[InputProtocol, Core, Data], None]:
@@ -98,12 +90,7 @@ class TypifiedDataState(Generic[InputProtocol, Core, Data, FactoryParams]):
 
         return decorator
 
-    def data_cleanup(
-        self,
-    ) -> Callable[
-        [Callable[[InputProtocol, Core, Data], None]],
-        Callable[[InputProtocol, Core, Data], None],
-    ]:
+    def data_cleanup(self) -> Decorator[[InputProtocol, Core, Data], None]:
         def decorator(
             decoratee: Callable[[InputProtocol, Core, Data], None]
         ) -> Callable[[InputProtocol, Core, Data], None]:
