@@ -229,7 +229,11 @@ def implement_method(
         if self.__automat_postponed__ is not None:
             print("POSTPONING MYSELF")
             if not is_procedure:
-                raise RuntimeError(f"attempting to reentrantly run {method.__qualname__} but it wants to return {return_annotation!r} not None ({return_annotation is None} {is_procedure})")
+                raise RuntimeError(
+                    f"attempting to reentrantly run {method.__qualname__} "
+                    f"but it wants to return {return_annotation!r} not None "
+                    f"({return_annotation is None} {is_procedure})"
+                )
 
             def rerunme() -> None:
                 implementation(self, *args, **kwargs)
