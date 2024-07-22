@@ -6,6 +6,7 @@ from functools import wraps
 from inspect import getfullargspec as getArgsSpec
 from itertools import count
 from typing import Callable, Iterable, TypeVar
+
 if sys.version_info < (3, 10):
     from typing_extensions import TypeAlias
 else:

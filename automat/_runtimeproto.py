@@ -64,5 +64,3 @@ def _liveSignature(method: Callable[..., object]) -> Signature:
         _fixAnnotation(method, param, "_annotation")
     _fixAnnotation(method, result, "_return_annotation")
     return result
-
-
