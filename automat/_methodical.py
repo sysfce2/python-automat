@@ -1,11 +1,15 @@
 # -*- test-case-name: automat._test.test_methodical -*-
 from __future__ import annotations
-
+import sys
 import collections
 from functools import wraps
 from inspect import getfullargspec as getArgsSpec
 from itertools import count
-from typing import Callable, Iterable, TypeAlias, TypeVar
+from typing import Callable, Iterable, TypeVar
+if sys.version_info < (3, 10):
+    from typing_extensions import TypeAlias
+else:
+    from typing import TypeAlias
 
 import attr
 

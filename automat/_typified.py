@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass, field
-from functools import wraps
-from typing import Any, Callable, Generic, TypeVar, overload
+from typing import Any, Callable, Generic, TypeVar
 
 if sys.version_info < (3, 10):
     from typing_extensions import Concatenate, ParamSpec
