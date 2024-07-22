@@ -155,10 +155,7 @@ class TypifiedDataState(Generic[InputProtocol, Core, Data, FactoryParams]):
         new_state: TypifiedDataState[
             InputProtocol, Core, OtherData, OtherFactoryParams
         ],
-    ) -> Callable[
-        [Callable[Concatenate[InputProtocol, Core, Data, OtherFactoryParams], R]],
-        Callable[Concatenate[InputProtocol, Core, Data, OtherFactoryParams], R],
-    ]:
+    ) -> Decorator[Concatenate[InputProtocol, Core, Data, OtherFactoryParams], R]:
         def decorator(
             decoratee: Callable[
                 Concatenate[InputProtocol, Core, Data, OtherFactoryParams], R
