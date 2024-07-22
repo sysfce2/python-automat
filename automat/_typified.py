@@ -149,18 +149,6 @@ class TypifiedDataState(Generic[InputProtocol, Core, Data, FactoryParams]):
 
         return decorator
 
-    def infer_pls(
-        self,
-        input_method: Callable[Concatenate[InputProtocol, OtherFactoryParams], R],
-        new_state: TypifiedDataState[
-            InputProtocol, Core, OtherData, OtherFactoryParams
-        ],
-    ) -> Callable[[Callable[OtherFactoryParams, R]], Callable[OtherFactoryParams, R]]:
-        def d(c: Callable[OtherFactoryParams, R]) -> Callable[OtherFactoryParams, R]:
-            return c
-
-        return d
-
     def data_transition(
         self,
         input_method: Callable[Concatenate[InputProtocol, OtherFactoryParams], R],
