@@ -213,7 +213,6 @@ def implement_method(
         transitioner = self.__automat_transitioner__
         data_at_start = self.__automat_data__
         if self.__automat_postponed__ is not None:
-            print("POSTPONING MYSELF")
             if not is_procedure:
                 raise RuntimeError(
                     f"attempting to reentrantly run {method.__qualname__} "
@@ -227,8 +226,6 @@ def implement_method(
             self.__automat_postponed__.append(rerunme)
             return None
         postponed = self.__automat_postponed__ = []
-        print(f"TRANSITION FROM {transitioner._state.name}")
-        print(f"             BY {method_input}")
         try:
             try:
                 [outputs, tracer] = transitioner.transition(method_input)
@@ -237,8 +234,6 @@ def implement_method(
 
                 traceback.print_exc()
                 raise
-            print(f"             TO {transitioner._state.name}")
-            print(f"{outputs=}")
             result: Any = None
             for output in outputs:
                 # here's the idea: there will be a state-setup output and a
@@ -248,13 +243,10 @@ def implement_method(
                 # that state, the protocol is in a self-consistent state and can
                 # run reentrant outputs.  not clear that state-teardown outputs are
                 # necessary
-                print(f">>>>> invoking {output=} {data_at_start=} {args=} {kwargs=}")
                 result = output(self, data_at_start, *args, **kwargs)
-                print(f"<<<<< invoked {output=}")
         finally:
             self.__automat_postponed__ = None
         while postponed:
-            print(len(postponed))
             postponed.pop(0)()
         return result
 
@@ -326,16 +318,8 @@ def create_data_output(data_factory: Callable[..., Data]) -> Callable[..., Data]
         ), "can't initialize while initializing"
         self.__automat_initializing_data__ = True
         try:
-            print(f"DI?: {data_factory=} {args=} {kwargs=}")
-            try:
-                new_data = data_factory(self, self.__automat_core__, *args, **kwargs)
-            except:
-                import traceback
-
-                traceback.print_exc()
-                raise
+            new_data = data_factory(self, self.__automat_core__, *args, **kwargs)
             self.__automat_data__ = new_data
-            print(f"DI!: {data_factory=} {args=} {kwargs=}")
             return new_data
         finally:
             self.__automat_initializing_data__ = False
@@ -389,7 +373,6 @@ class TypifiedBuilder(Generic[InputProtocol, Core]):
         ],
         requires_data: bool,
     ) -> None:
-        print(f"REGISTER1 {impl=}, {requires_data=}")
         self.automaton.addTransition(
             old,
             input.__name__,
