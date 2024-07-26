@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass, field
-from typing import Any, Callable, Generic, TypeVar
+from typing import Any, Callable, Generic, Iterable, TypeVar, overload
 
 if sys.version_info < (3, 10):
     from typing_extensions import Concatenate, ParamSpec
@@ -12,9 +12,9 @@ else:
 from ._core import Automaton, Transitioner
 from ._runtimeproto import (
     ProtocolAtRuntime,
+    _liveSignature,
     actuallyDefinedProtocolMethods,
     runtime_name,
-    _liveSignature,
 )
 
 InputProtocol = TypeVar("InputProtocol")
@@ -24,9 +24,12 @@ P = ParamSpec("P")
 R = TypeVar("R")
 OtherInputProtocol = TypeVar("OtherInputProtocol")
 OtherData = TypeVar("OtherData")
+AnyArgs = ParamSpec("AnyArgs")
+AnyResult = TypeVar("AnyResult")
 Decorator = Callable[[Callable[P, R]], Callable[P, R]]
 FactoryParams = ParamSpec("FactoryParams")
 OtherFactoryParams = ParamSpec("OtherFactoryParams")
+AnyCallable = TypeVar("AnyCallable", bound=Callable[..., Any])
 
 
 @dataclass(frozen=True)
@@ -34,45 +37,71 @@ class TypifiedState(Generic[InputProtocol, Core]):
     name: str
     builder: TypifiedBuilder[InputProtocol, Core]
 
+    def edge(
+        self,
+        method: Callable[Concatenate[InputProtocol, P], None],
+        target: (
+            TypifiedState[InputProtocol, Core]
+            | TypifiedDataState[InputProtocol, Core, OtherData, P]
+        ),
+    ) -> None:
+        @self.transition(method, target)
+        def null(*args: object, **kwargs: object) -> None: ...
+
+    def loop(self, method: Callable[Concatenate[InputProtocol, P], None]) -> None:
+        self.edge(method, self)
+
+    @overload
     def transition(
         self,
-        input_method: Callable[Concatenate[InputProtocol, P], R],
-        new_state: TypifiedState[InputProtocol, Core],
-    ) -> Decorator[Concatenate[InputProtocol, Core, P], R]:
-        def decorator(
-            decoratee: Callable[Concatenate[InputProtocol, Core, P], R]
-        ) -> Callable[Concatenate[InputProtocol, Core, P], R]:
-            self.builder._register_plain(
-                old=self,
-                new=new_state,
-                impl=decoratee,
-                input=input_method,
-                requires_data=False,
-            )
-            return decoratee
-
-        return decorator
-
-    def data_transition(
+        method: Callable[Concatenate[InputProtocol, P], R],
+        target: TypifiedState[InputProtocol, Core],
+    ) -> Decorator[Concatenate[InputProtocol, Core, P], R]: ...
+    @overload
+    def transition(
         self,
-        input_method: Callable[Concatenate[InputProtocol, OtherFactoryParams], R],
-        new_state: TypifiedDataState[
-            InputProtocol, Core, OtherData, OtherFactoryParams
-        ],
-    ) -> Decorator[Concatenate[InputProtocol, Core, OtherFactoryParams], R]:
+        method: Callable[Concatenate[InputProtocol, OtherFactoryParams], R],
+        target: TypifiedDataState[InputProtocol, Core, OtherData, OtherFactoryParams],
+    ) -> Decorator[Concatenate[InputProtocol, Core, OtherFactoryParams], R]: ...
+    @overload
+    def transition(
+        self,
+        method: Callable[Concatenate[InputProtocol, P], R],
+    ) -> Decorator[Concatenate[InputProtocol, Core, P], R]: ...
+    def transition(
+        self,
+        method: Callable[..., object],
+        target: (
+            TypifiedDataState[InputProtocol, Core, OtherData, OtherFactoryParams]
+            | TypifiedState[InputProtocol, Core]
+            | None
+        ) = None,
+    ) -> Decorator[AnyArgs, AnyResult]:
+        reg = self.builder._register_transition
+
         def decorator(
-            decoratee: Callable[Concatenate[InputProtocol, Core, OtherFactoryParams], R]
-        ) -> Callable[Concatenate[InputProtocol, Core, OtherFactoryParams], R]:
-            self.builder._register_data(
-                old=self,
-                new=new_state,
-                impl=decoratee,
-                input=input_method,
-                requires_data=False,
-            )
+            decoratee: Callable[AnyArgs, AnyResult]
+        ) -> Callable[AnyArgs, AnyResult]:
+            # Type puzzle: I could not figure out a declared type for the
+            # 'new=' parameter here that would let me do this invocation just
+            # once.
+            if target is not None:
+                reg(old=self, new=target, impl=decoratee, input=method)
+            else:
+                reg(old=self, new=self, impl=decoratee, input=method)
             return decoratee
 
         return decorator
+
+    def _produce_outputs(
+        self,
+        impl: Callable[..., object],
+        old: (
+            TypifiedDataState[InputProtocol, Core, OtherData, OtherFactoryParams]
+            | TypifiedState[InputProtocol, Core]
+        ),
+    ) -> Iterable[Callable[..., object]]:
+        yield create_method_output(impl, isinstance(old, TypifiedDataState))
 
 
 @dataclass(frozen=True)
@@ -99,64 +128,73 @@ class TypifiedDataState(Generic[InputProtocol, Core, Data, FactoryParams]):
 
         return decorator
 
+    def edge(
+        self,
+        method: Callable[Concatenate[InputProtocol, P], None],
+        target: (
+            TypifiedState[InputProtocol, Core]
+            | TypifiedDataState[InputProtocol, Core, OtherData, P]
+        ),
+    ) -> None:
+        @self.transition(method, target)
+        def null(*args: object, **kwargs: object) -> None: ...
+
+    def loop(self, method: Callable[Concatenate[InputProtocol, P], None]) -> None:
+        # inference problem???
+        self.edge(method, self)  # type:ignore[misc]
+
+    @overload
     def transition(
         self,
-        input_method: Callable[Concatenate[InputProtocol, P], R],
-        new_state: TypifiedState[InputProtocol, Core],
-    ) -> Decorator[Concatenate[InputProtocol, Core, Data, P], R]:
-        def decorator(
-            decoratee: Callable[Concatenate[InputProtocol, Core, Data, P], R]
-        ) -> Callable[Concatenate[InputProtocol, Core, Data, P], R]:
-            self.builder._register_plain(
-                old=self,
-                new=new_state,
-                impl=decoratee,
-                input=input_method,
-                requires_data=True,
-            )
-            return decoratee
-
-        return decorator
-
-    def self_transition(
-        self, input_method: Callable[Concatenate[InputProtocol, P], R]
-    ) -> Decorator[Concatenate[InputProtocol, Core, Data, P], R]:
-        def decorator(
-            decoratee: Callable[Concatenate[InputProtocol, Core, Data, P], R]
-        ) -> Callable[Concatenate[InputProtocol, Core, Data, P], R]:
-            self.builder._register_data(
-                old=self,
-                new=self,
-                impl=decoratee,
-                input=input_method,
-                requires_data=True,
-            )
-            return decoratee
-
-        return decorator
-
-    def data_transition(
+        method: Callable[Concatenate[InputProtocol, P], R],
+        target: TypifiedState[InputProtocol, Core],
+    ) -> Decorator[Concatenate[InputProtocol, Core, Data, P], R]: ...
+    @overload
+    def transition(
+        self, method: Callable[Concatenate[InputProtocol, P], R]
+    ) -> Decorator[Concatenate[InputProtocol, Core, Data, P], R]: ...
+    @overload
+    def transition(
         self,
-        input_method: Callable[Concatenate[InputProtocol, OtherFactoryParams], R],
-        new_state: TypifiedDataState[
-            InputProtocol, Core, OtherData, OtherFactoryParams
-        ],
-    ) -> Decorator[Concatenate[InputProtocol, Core, Data, OtherFactoryParams], R]:
+        method: Callable[Concatenate[InputProtocol, OtherFactoryParams], R],
+        target: TypifiedDataState[InputProtocol, Core, OtherData, OtherFactoryParams],
+    ) -> Decorator[Concatenate[InputProtocol, Core, Data, OtherFactoryParams], R]: ...
+    def transition(
+        self,
+        method: Callable[..., object],
+        target: (
+            TypifiedDataState[InputProtocol, Core, OtherData, OtherFactoryParams]
+            | TypifiedState[InputProtocol, Core]
+            | None
+        ) = None,
+    ) -> Decorator[AnyArgs, AnyResult]:
+        reg = self.builder._register_transition
+
         def decorator(
-            decoratee: Callable[
-                Concatenate[InputProtocol, Core, Data, OtherFactoryParams], R
-            ]
-        ) -> Callable[Concatenate[InputProtocol, Core, Data, OtherFactoryParams], R]:
-            self.builder._register_data(
-                old=self,
-                new=new_state,
-                impl=decoratee,
-                input=input_method,
-                requires_data=True,
-            )
+            decoratee: Callable[AnyArgs, AnyResult]
+        ) -> Callable[AnyArgs, AnyResult]:
+            # Type puzzle: I could not figure out a declared type for the
+            # 'new=' parameter here that would let me do this invocation just
+            # once.
+            if target is not None:
+                reg(old=self, new=target, impl=decoratee, input=method)
+            else:
+                reg(old=self, new=self, impl=decoratee, input=method)
             return decoratee
 
         return decorator
+
+    def _produce_outputs(
+        self,
+        impl: Callable[..., object],
+        old: (
+            TypifiedDataState[InputProtocol, Core, OtherData, OtherFactoryParams]
+            | TypifiedState[InputProtocol, Core]
+        ),
+    ) -> Iterable[Callable[..., object]]:
+        if self is not old:
+            yield create_data_output(self.factory)
+        yield create_method_output(impl, isinstance(old, TypifiedDataState))
 
 
 @dataclass
@@ -173,22 +211,6 @@ class TypifiedBase(Generic[Core]):
     __automat_data__: object | None = None
     __automat_initializing_data__: bool = False
     __automat_postponed__: list[Callable[[], None]] | None = None
-
-
-@dataclass
-class NoDataTransition:
-    input_name: str
-    implementation: Callable[..., object]
-
-
-@dataclass
-class DataTransition(Generic[Data]):
-    """
-    A transition I{to} a state that constructs.
-    """
-
-    input_name: str
-    implementation: Callable[..., tuple[object, Data]]
 
 
 def implement_method(
@@ -269,10 +291,10 @@ def create_method_output(
     """
 
     sig = _liveSignature(method)
-    if requires_data:
-        # 0: self, 1: self.__automat_core__, 2: self.__automat_data__
-        param = list(sig.parameters.values())[2]
-        ann = param.annotation
+    # if requires_data:
+    #     # 0: self, 1: self.__automat_core__, 2: self.__automat_data__
+    #     param = list(sig.parameters.values())[2]
+    #     ann = param.annotation
 
     def theimpl(
         self: TypifiedBase[Core],
@@ -287,9 +309,9 @@ def create_method_output(
             #     raise RuntimeError(
             #         f"data factories cannot invoke their state machines reentrantly {}"
             #     )
-            assert isinstance(
-                data_at_start, ann
-            ), f"expected {param=} to be {ann=} but got {type(data_at_start)=} instead"
+            # assert isinstance(
+            #     data_at_start, ann
+            # ), f"expected {param=} to be {ann=} but got {type(data_at_start)=} instead"
             extra_args += [data_at_start]
         # if anything is invoked reentrantly here, then we can't possibly have
         # set __automat_data__ and the data argument to the reentrant method
@@ -356,62 +378,25 @@ class TypifiedBuilder(Generic[InputProtocol, Core]):
         assert not self._initial, "initial state cannot require state-specific data"
         return TypifiedDataState(name, self, data_factory)
 
-    def _register_plain(
+    def _register_transition(
         self,
         *,
         old: (
             TypifiedDataState[InputProtocol, Core, Data, P]
             | TypifiedState[InputProtocol, Core]
         ),
-        new: TypifiedState[InputProtocol, Core],
+        new: (
+            TypifiedState[InputProtocol, Core]
+            | TypifiedDataState[InputProtocol, Core, OtherData, OtherFactoryParams]
+        ),
         impl: Callable[..., object],
-        input: Callable[
-            [
-                InputProtocol,
-            ],
-            object,
-        ],
-        requires_data: bool,
+        input: Callable[[InputProtocol], object],
     ) -> None:
         self.automaton.addTransition(
             old,
             input.__name__,
             new,
-            tuple([create_method_output(impl, requires_data=requires_data)]),
-        )
-
-    def _register_data(
-        self,
-        *,
-        old: (
-            TypifiedDataState[InputProtocol, Core, Data, P]
-            | TypifiedState[InputProtocol, Core]
-        ),
-        new: TypifiedDataState[InputProtocol, Core, OtherData, OtherFactoryParams],
-        impl: Callable[..., object],
-        input: Callable[
-            [
-                InputProtocol,
-            ],
-            object,
-        ],
-        requires_data: bool,
-    ):
-        """
-        registering a transition *to* a data state, which may require
-        constructing a data object.
-        """
-        impls: list[Callable[..., object]] = []
-        # Either way, we still need to run the actual implementation
-        if old is not new:
-            # Otherwise, let's construct a new one.
-            impls.append(create_data_output(new.factory))
-        impls.append(create_method_output(impl, requires_data=requires_data))
-        self.automaton.addTransition(
-            old,
-            input.__name__,
-            new,
-            tuple(impls),
+            tuple(new._produce_outputs(impl, old)),
         )
 
     def build(self) -> Callable[[Core], InputProtocol]:
