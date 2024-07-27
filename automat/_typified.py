@@ -149,8 +149,11 @@ class DataToData(Generic[InputProtocol, Core, Data, FactoryParams, OtherData]):
     ]:
         return TransitionRegistrar(input, self.old, self.new)
 
-    def dataless(self) -> DataToDataNoData[InputProtocol, Core, Data, FactoryParams, OtherData]:
+    def dataless(
+        self,
+    ) -> DataToDataNoData[InputProtocol, Core, Data, FactoryParams, OtherData]:
         return DataToDataNoData(self.old, self.new)
+
 
 @dataclass(frozen=True)
 class DataToSelf(Generic[InputProtocol, Core, Data]):
@@ -185,6 +188,7 @@ class DataToDataNoData(Generic[InputProtocol, Core, Data, FactoryParams, OtherDa
         Concatenate[InputProtocol, Core, P], Concatenate[InputProtocol, P], R
     ]:
         return TransitionRegistrar(input, self.old, self.new, True)
+
 
 @dataclass(frozen=True)
 class DataToSelfNoData(Generic[InputProtocol, Core, Data]):
@@ -324,7 +328,7 @@ class TypifiedDataState(Generic[InputProtocol, Core, Data, FactoryParams]):
         )
 
 
-AnyState:TypeAlias = "TypifiedState[Any, Any] | TypifiedDataState[Any, Any, Any, Any]"
+AnyState: TypeAlias = "TypifiedState[Any, Any] | TypifiedDataState[Any, Any, Any, Any]"
 
 
 @dataclass
