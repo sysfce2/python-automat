@@ -5,9 +5,9 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Generic, Iterable, TypeVar, overload
 
 if sys.version_info < (3, 10):
-    from typing_extensions import Concatenate, ParamSpec
+    from typing_extensions import Concatenate, ParamSpec, TypeAlias
 else:
-    from typing import Concatenate, ParamSpec
+    from typing import Concatenate, ParamSpec, TypeAlias
 
 from ._core import Automaton, Transitioner
 from ._runtimeproto import (
@@ -198,9 +198,6 @@ class DataToSelfNoData(Generic[InputProtocol, Core, Data]):
         return TransitionRegistrar(input, self.state, self.state, True)
 
 
-AnyTransitionRegistrarFactory = NoToNo | NoToData | DataToNo | DataToData | DataToSelf
-
-
 @dataclass(frozen=True)
 class TypifiedState(Generic[InputProtocol, Core]):
     name: str
@@ -327,7 +324,7 @@ class TypifiedDataState(Generic[InputProtocol, Core, Data, FactoryParams]):
         )
 
 
-AnyState = TypifiedState[Any, Any] | TypifiedDataState[Any, Any, Any, Any]
+AnyState:TypeAlias = "TypifiedState[Any, Any] | TypifiedDataState[Any, Any, Any, Any]"
 
 
 @dataclass
