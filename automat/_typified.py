@@ -424,7 +424,7 @@ def create_method_output(
     initially.
     """
 
-    sig = _liveSignature(method)
+    # sig = _liveSignature(method)
     # if requires_data:
     #     # 0: self, 1: self.__automat_core__, 2: self.__automat_data__
     #     param = list(sig.parameters.values())[2]
