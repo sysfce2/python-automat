@@ -132,7 +132,8 @@ def _coffee_machine() -> TypifiedBuilder[_BrewerInternals, BrewCore]:
         core.carafe = carafe
         ready_check(brewer, core)
 
-    @not_ready.data_transition(_BrewerInternals._ready, ready)
+    @not_ready.to(ready).upon(_BrewerInternals._ready)
+    @not_ready.transition(_BrewerInternals._ready, ready)
     def get_ready(
         brewer: _BrewerInternals,
         core: BrewCore,
@@ -155,7 +156,7 @@ def _coffee_machine() -> TypifiedBuilder[_BrewerInternals, BrewCore]:
     ) -> None:
         core.ready_light.on = False
 
-    @ready.data_transition(Brewer.brew_button, brewing)
+    @ready.transition(Brewer.brew_button, brewing)
     def brew(brewer: _BrewerInternals, core: BrewCore, ready: Ready) -> None:
         core.brew_light.on = True
         print("BREW CALLED")

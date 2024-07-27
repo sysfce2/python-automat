@@ -97,8 +97,8 @@ class Automaton(Generic[State, Input, Output]):
         for anInState, anInputSymbol, anOutState, _ in self._transitions:
             if anInState == inState and anInputSymbol == inputSymbol:
                 raise ValueError(
-                    "already have transition from {} via {}".format(
-                        inState, inputSymbol
+                    "already have transition from {} to {} via {}".format(
+                        inState, anOutState, inputSymbol
                     )
                 )
         self._transitions.add((inState, inputSymbol, outState, tuple(outputSymbols)))
