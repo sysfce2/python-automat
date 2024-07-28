@@ -55,7 +55,6 @@ class TaskPerformer:
         return it
 
 
-#
 class ConnectionCoordinator(Protocol):
     def start(self) -> None:
         "kick off the whole process"
