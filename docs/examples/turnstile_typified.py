@@ -22,21 +22,27 @@ class Turnstile(Protocol):
     def fare_paid(self, coin: Coin) -> None:
         "The fare was paid."
 
-builder = TypifiedBuilder[Turnstile, Lock](Lock)
+builder = TypifiedBuilder(Turnstile, Lock)
 
-locked = builder.state("Locked", initial=True)
+locked = builder.state("Locked")
 unlocked = builder.state("Unlocked")
 
-@locked.transition(Turnstile.fare_paid, unlocked)
-def pay(self: Turnstile, lock: Lock, coin: Coin) -> None:  # fare_paid's args go here
+@locked.to(unlocked).upon(Turnstile.fare_paid)
+def pay(self: Turnstile, lock: Lock, coin: Coin) -> None:
     lock.disengage()
 
-@locked.transition(Turnstile.arm_turned, locked)
+@locked.loop().upon(Turnstile.arm_turned)
 def block(self: Turnstile, lock: Lock) -> None:
     print("**Clunk!**  The turnstile doesn't move.")
 
-@unlocked.transition(Turnstile.arm_turned)
+@unlocked.to(locked).upon(Turnstile.arm_turned)
 def turn(self: Turnstile, lock: Lock) -> None:
     lock.engage()
 
-TurnstileMachine = machine.build()
+TurnstileMachine = builder.build()
+machine = TurnstileMachine(Lock())
+machine.arm_turned()
+machine.fare_paid(Coin())
+machine.arm_turned()
+machine.arm_turned()
+
