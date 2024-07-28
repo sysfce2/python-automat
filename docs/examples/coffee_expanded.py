@@ -98,15 +98,21 @@ def _coffee_machine() -> TypifiedBuilder[_BrewerInternals, BrewCore]:
         return Ready(beans, water, carafe)
 
     def mixture_factory(brewer: _BrewerInternals, core: BrewCore) -> Mixture:
-        # we already do have a 'ready' but it's state-specific data which makes
+        # We already do have a 'ready' but it's State-Specific Data which makes
         # it really annoying to relay on to the *next* state without passing it
         # through the state core.  requiring the factory to take SSD inherently
         # means that it could only work with transitions away from a single
-        # state, which would not be helpful, although that *is* what we want here.
-        return None             # type:ignore[return-value]
+        # state, which would not be helpful, although that *is* what we want
+        # here.
 
-    ready = builder.data_state("Ready", ready_factory)
-    brewing = builder.data_state("Brewing", mixture_factory)
+        assert core.beans is not None
+        assert core.water is not None
+        assert core.carafe is not None
+
+        return Mixture(core.beans, core.water)
+
+    ready = builder.state("Ready", ready_factory)
+    brewing = builder.state("Brewing", mixture_factory)
 
     def ready_check(brewer: _BrewerInternals, core: BrewCore) -> None:
         if (
@@ -117,23 +123,22 @@ def _coffee_machine() -> TypifiedBuilder[_BrewerInternals, BrewCore]:
         ):
             brewer._ready(core.beans, core.water, core.carafe)
 
-    @not_ready.transition(Brewer.put_in_beans, not_ready)
+    @not_ready.loop().upon(Brewer.put_in_beans)
     def put_beans(brewer: _BrewerInternals, core: BrewCore, beans: Beans) -> None:
         core.beans = beans
         ready_check(brewer, core)
 
-    @not_ready.transition(Brewer.put_in_water, not_ready)
+    @not_ready.loop().upon(Brewer.put_in_water)
     def put_water(brewer: _BrewerInternals, core: BrewCore, water: Water) -> None:
         core.water = water
         ready_check(brewer, core)
 
-    @not_ready.transition(Brewer.put_in_carafe, not_ready)
+    @not_ready.loop().upon(Brewer.put_in_carafe)
     def put_carafe(brewer: _BrewerInternals, core: BrewCore, carafe: Carafe) -> None:
         core.carafe = carafe
         ready_check(brewer, core)
 
     @not_ready.to(ready).upon(_BrewerInternals._ready)
-    @not_ready.transition(_BrewerInternals._ready, ready)
     def get_ready(
         brewer: _BrewerInternals,
         core: BrewCore,
@@ -156,13 +161,13 @@ def _coffee_machine() -> TypifiedBuilder[_BrewerInternals, BrewCore]:
     ) -> None:
         core.ready_light.on = False
 
-    @ready.transition(Brewer.brew_button, brewing)
+    @ready.to(brewing).upon(Brewer.brew_button)
     def brew(brewer: _BrewerInternals, core: BrewCore, ready: Ready) -> None:
         core.brew_light.on = True
         print("BREW CALLED")
         core.brewing = ready.brew()
 
-    @brewing.transition(_BrewerInternals.wait_a_while, not_ready)
+    @brewing.to(not_ready).upon(_BrewerInternals.wait_a_while)
     def brewed(brewer: _BrewerInternals, core: BrewCore, mixture: Mixture) -> Mixture:
         core.brew_light.on = False
         return mixture
