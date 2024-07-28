@@ -1,9 +1,7 @@
-from typing import Protocol
+from typing import Callable, Protocol
 
 from automat import TypifiedBuilder
 
-class Coin:
-    "A token conveying value."
 
 class Lock:
     "A sample I/O device."
@@ -19,30 +17,40 @@ class Turnstile(Protocol):
     def arm_turned(self) -> None:
         "The arm was turned."
 
-    def fare_paid(self, coin: Coin) -> None:
+    def fare_paid(self, coin: int) -> None:
         "The fare was paid."
 
-builder = TypifiedBuilder(Turnstile, Lock)
 
-locked = builder.state("Locked")
-unlocked = builder.state("Unlocked")
+def buildBuilder() -> Callable[[Lock], Turnstile]:
+    builder = TypifiedBuilder(Turnstile, Lock)
+    locked = builder.state("Locked")
+    unlocked = builder.state("Unlocked")
 
-@locked.to(unlocked).upon(Turnstile.fare_paid)
-def pay(self: Turnstile, lock: Lock, coin: Coin) -> None:
-    lock.disengage()
+    @locked.to(unlocked).upon(Turnstile.fare_paid)
+    def pay(self: Turnstile, lock: Lock, coin: int) -> None:
+        lock.disengage()
 
-@locked.loop().upon(Turnstile.arm_turned)
-def block(self: Turnstile, lock: Lock) -> None:
-    print("**Clunk!**  The turnstile doesn't move.")
+    @locked.loop().upon(Turnstile.arm_turned)
+    def block(self: Turnstile, lock: Lock) -> None:
+        print("**Clunk!**  The turnstile doesn't move.")
 
-@unlocked.to(locked).upon(Turnstile.arm_turned)
-def turn(self: Turnstile, lock: Lock) -> None:
-    lock.engage()
+    @unlocked.to(locked).upon(Turnstile.arm_turned)
+    def turn(self: Turnstile, lock: Lock) -> None:
+        lock.engage()
 
-TurnstileMachine = builder.build()
-machine = TurnstileMachine(Lock())
-machine.arm_turned()
-machine.fare_paid(Coin())
-machine.arm_turned()
-machine.arm_turned()
+    return builder.build()
 
+
+TurnstileImpl = buildBuilder()
+turner = TurnstileImpl(Lock())
+print("Paying fare 1.")
+turner.fare_paid(1)
+print("Walking through.")
+turner.arm_turned()
+print("Jumping.")
+turner.arm_turned()
+print("Paying fare 2.")
+turner.fare_paid(1)
+print("Walking through 2.")
+turner.arm_turned()
+print("Done.")
