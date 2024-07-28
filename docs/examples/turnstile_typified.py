@@ -5,10 +5,10 @@ from automat import TypifiedBuilder
 class Lock:
     "A sample I/O device."
 
-    def engage(self):
+    def engage(self) -> None:
         print("Locked.")
 
-    def disengage(self):
+    def disengage(self) -> None:
         print("Unlocked.")
 
 
