@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass, field
-from typing import Any, Callable, Generic, Iterable, TypeVar, overload
+from typing import Any, Callable, Generic, Iterable, TypeVar, overload, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from graphviz import Digraph
 
 if sys.version_info < (3, 10):
     from typing_extensions import Concatenate, ParamSpec, TypeAlias
@@ -358,6 +361,7 @@ class TypifiedBase(Generic[Core]):
     __automat_postponed__: list[Callable[[], None]] | None = None
 
 
+
 def implementMethod(
     method: Callable[..., object],
 ) -> Callable[..., object]:
@@ -496,6 +500,36 @@ def create_data_output(data_factory: Callable[..., Data]) -> Callable[..., Data]
     return dataimpl
 
 
+@dataclass(frozen=True)
+class TypifiedMachine(Generic[InputProtocol, Core]):
+    __automat_type__: type[TypifiedBase[Core]]
+    __automat_automaton__: Automaton[
+        TypifiedState[InputProtocol, Core]
+        | TypifiedDataState[InputProtocol, Core, Any, ...],
+        str,
+        Callable[..., object],
+    ]
+
+    def __call__(self, core: Core) -> InputProtocol:
+        result: Any = self.__automat_type__(
+            core,
+            Transitioner(
+                self.__automat_automaton__,
+                self.__automat_automaton__.initialState,
+            ),
+        )
+        return result
+
+    def asDigraph(self) -> Digraph:
+        from ._visualize import makeDigraph
+
+        return makeDigraph(
+            self.__automat_automaton__,
+            stateAsString=lambda state: state.name,
+            inputAsString=lambda input: input,
+            outputAsString=lambda output: output.__name__,
+        )
+
 @dataclass(eq=False)
 class TypifiedBuilder(Generic[InputProtocol, Core]):
     protocol: ProtocolAtRuntime[InputProtocol]
@@ -543,10 +577,4 @@ class TypifiedBuilder(Generic[InputProtocol, Core]):
             namespace,
         )
 
-        def create(core: Core) -> InputProtocol:
-            result: Any = runtime_type(
-                core, Transitioner(self._automaton, self._automaton.initialState)
-            )
-            return result
-
-        return create
+        return TypifiedMachine(runtime_type, self._automaton)

@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from itertools import count
 from typing import Callable, List, Protocol
 
-from automat import TypicalBuilder
+from automat import TypifiedBuilder
 
 
 # scaffolding; no state machines yet
@@ -84,123 +84,78 @@ class ConnectionState:
     queue: List[Request] = field(default_factory=list)
 
 
-machine = TypicalBuilder(ConnectionCoordinator, ConnectionState)
+def buildMachine() -> Callable[[ConnectionState], ConnectionCoordinator]:
 
+    machine = TypifiedBuilder(ConnectionCoordinator, ConnectionState)
+    Initial = machine.state("Initial")
+    Requested = machine.state("Requested")
+    AtCapacity = machine.state("AtCapacity")
+    CleaningUp = machine.state("CleaningUp")
 
-@machine.common(ConnectionCoordinator.taskComplete)
-def taskComplete(
-    c: ConnectionCoordinator, s: ConnectionState, task: Task, success: bool
-) -> None:
-    if success:
-        c.cleanup()
-        s.allDone(task)
-    else:
-        c.headroom()
+    Requested.to(AtCapacity).upon(ConnectionCoordinator.atCapacity).returns(None)
+    Requested.loop().upon(ConnectionCoordinator.headroom).returns(None)
+    CleaningUp.loop().upon(ConnectionCoordinator.headroom).returns(None)
+    CleaningUp.loop().upon(ConnectionCoordinator.cleanup).returns(None)
 
+    @Initial.to(Requested).upon(ConnectionCoordinator.start)
+    def startup(coord: ConnectionCoordinator, core: ConnectionState) -> None:
+        core.getter.startGettingRequests(coord.requestReceived)
 
-@machine.handle(ConnectionCoordinator.cleanup)
-def cleanup(self: Requested | AtCapacity):
-    # We *don't* want to recurse in here; stopping tasks will cause
-    # taskComplete!
-    while self.state.performer.activeTasks:
-        self.state.performer.activeTasks[-1].stop()
-
-
-@machine.state()
-@dataclass
-class Initial:
-    coord: ConnectionCoordinator
-    state: ConnectionState
-
-    @machine.handle(ConnectionCoordinator.start)
-    def start(self) -> None:
-        "let's get this party started"
-        self.state.getter.startGettingRequests(self.coord.requestReceived)
-
-
-@machine.state()
-@dataclass
-class Requested:
-    state: ConnectionState
-    coord: ConnectionCoordinator
-
-    @machine.handle(ConnectionCoordinator.requestReceived)
-    def requestReceived(self, r: Request) -> None:
-        print("immediately handling request", r)
-        self.state.performer.performTask(r, self.coord.taskComplete)
-        if len(self.state.performer.activeTasks) >= self.state.performer.taskLimit:
-            self.coord.atCapacity()
-
-    @machine.handle(ConnectionCoordinator.atCapacity)
-    def atCapacity(self) -> None:
-        "at capacity; don't do anything, but enter a state"
-        print("at capacity")
-
-    @machine.handle(ConnectionCoordinator.headroom)
-    def headroom(self) -> None:
-        "no-op in this state"
-        print("headroom in requested state")
-
-    cleanup = cleanup
-
-
-@machine.state()
-@dataclass
-class AtCapacity:
-    state: ConnectionState
-    coord: ConnectionCoordinator
-
-    @machine.handle(ConnectionCoordinator.requestReceived)
-    def requestReceived(self, r: Request) -> None:
+    @AtCapacity.loop().upon(ConnectionCoordinator.requestReceived)
+    def requestReceived(
+        coord: ConnectionCoordinator, core: ConnectionState, r: Request
+    ) -> None:
         print("buffering request", r)
-        self.state.queue.append(r)
+        core.queue.append(r)
 
-    @machine.handle(ConnectionCoordinator.headroom)
-    def headroom(self) -> None:
+    @AtCapacity.to(Requested).upon(ConnectionCoordinator.headroom)
+    def headroom(coord: ConnectionCoordinator, core: ConnectionState) -> None:
         "nothing to do, just transition to Requested state"
-        unhandledRequest = self.state.queue.pop()
+        unhandledRequest = core.queue.pop()
         print("dequeueing", unhandledRequest)
-        self.coord.requestReceived(unhandledRequest)
+        coord.requestReceived(unhandledRequest)
 
-    cleanup = cleanup
-
-
-@machine.state()
-@dataclass
-class CleaningUp:
-    core: ConnectionState
-
-    @machine.handle(ConnectionCoordinator.cleanup)
-    def noop(self) -> None:
-        "we're already cleaning up don't clean up"
-        print("cleanup in cleanup")
-
-    @machine.handle(ConnectionCoordinator.headroom)
-    def headroom(self) -> None:
-        "no-op in this state"
-        print("headroom in requested state")
+    @Requested.loop().upon(ConnectionCoordinator.requestReceived)
+    def requestedRequest(
+        coord: ConnectionCoordinator, core: ConnectionState, r: Request
+    ) -> None:
+        print("immediately handling request", r)
+        core.performer.performTask(r, coord.taskComplete)
+        if len(core.performer.activeTasks) >= core.performer.taskLimit:
+            coord.atCapacity()
 
 
-Initial.start.enter(Requested)
+    @Initial.loop().upon(ConnectionCoordinator.taskComplete)
+    @Requested.loop().upon(ConnectionCoordinator.taskComplete)
+    @AtCapacity.loop().upon(ConnectionCoordinator.taskComplete)
+    @CleaningUp.loop().upon(ConnectionCoordinator.taskComplete)
+    def taskComplete(
+        c: ConnectionCoordinator, s: ConnectionState, task: Task, success: bool
+    ) -> None:
+        if success:
+            c.cleanup()
+            s.allDone(task)
+        else:
+            c.headroom()
 
-AtCapacity.requestReceived.enter(AtCapacity)
-AtCapacity.headroom.enter(Requested)
+    @Requested.to(CleaningUp).upon(ConnectionCoordinator.cleanup)
+    @AtCapacity.to(CleaningUp).upon(ConnectionCoordinator.cleanup)
+    def cleanup(coord: ConnectionCoordinator, core: ConnectionState):
+        # We *don't* want to recurse in here; stopping tasks will cause
+        # taskComplete!
+        while core.performer.activeTasks:
+            core.performer.activeTasks[-1].stop()
 
-CleaningUp.noop.enter(CleaningUp)
-
-Requested.requestReceived.enter(Requested)
-Requested.atCapacity.enter(AtCapacity)
-
-cleanup.enter(CleaningUp)
+    return machine.build()
 
 
-ConnectionMachine = machine.buildClass()
+ConnectionMachine = buildMachine()
 
 
 def begin(
     r: RequestGetter, t: TaskPerformer, done: Callable[[Task], None]
 ) -> ConnectionCoordinator:
-    machine = ConnectionMachine(r, t, done)
+    machine = ConnectionMachine(ConnectionState(r, t, done))
     machine.start()
     return machine
 
@@ -224,7 +179,7 @@ def story() -> None:
     cb(Request())
     cb(Request())
     print([each for each in tper.activeTasks])
-    sc: ConnectionState = m._stateCore  # type:ignore
+    sc: ConnectionState = m.__automat_core__  # type:ignore
     print(sc.queue)
     tper.activeTasks[0].complete(False)
     tper.activeTasks[0].complete(False)

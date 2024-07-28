@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import argparse
 import sys
+from functools import wraps
 from typing import Callable, Iterator
 
 import graphviz
 
-from ._core import Automaton
+from ._core import Automaton, Input, Output, State
 from ._discover import findMachines
 from ._methodical import MethodicalMachine
-from ._typical import _TypicalClass
+from ._typified import TypifiedMachine
 
 
 def _gvquote(s: str) -> str:
@@ -69,15 +70,28 @@ def tableMaker(
     return _E("table", *rows)
 
 
+def escapify(x: Callable[[State], str]) -> Callable[[State], str]:
+    @wraps(x)
+    def impl(t: State) -> str:
+        return x(t).replace("<", "&lt;").replace(">", "&gt;")
+
+    return impl
+
+
 def makeDigraph(
-    automaton: Automaton,
-    inputAsString: Callable[[object], str] = repr,
-    outputAsString: Callable[[object], str] = repr,
-    stateAsString: Callable[[object], str] = repr,
+    automaton: Automaton[State, Input, Output],
+    inputAsString: Callable[[Input], str] = repr,
+    outputAsString: Callable[[Output], str] = repr,
+    stateAsString: Callable[[State], str] = repr,
 ) -> graphviz.Digraph:
     """
     Produce a L{graphviz.Digraph} object from an automaton.
     """
+
+    inputAsString = escapify(inputAsString)
+    outputAsString = escapify(outputAsString)
+    stateAsString = escapify(stateAsString)
+
     digraph = graphviz.Digraph(
         graph_attr={"pack": "true", "dpi": "100"},
         node_attr={"fontname": "Menlo"},
@@ -127,7 +141,7 @@ def tool(
     _argv: list[str] = sys.argv[1:],
     _syspath: list[str] = sys.path,
     _findMachines: Callable[
-        [str], Iterator[tuple[str, MethodicalMachine | _TypicalClass]]
+        [str], Iterator[tuple[str, MethodicalMachine | TypifiedMachine]]
     ] = findMachines,
     _print: Callable[..., None] = print,
 ):
