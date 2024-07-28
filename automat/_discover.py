@@ -56,8 +56,6 @@ def findMachinesViaWrapper(
     while queue:
         attr = queue.pop()
         value = attr.load()
-        print("inspecting", value)
-
         if (
             isinstance(value, MethodicalMachine) or isinstance(value, TypifiedMachine)
         ) and value not in visited:
