@@ -1,5 +1,4 @@
 from typing import Callable, Protocol
-
 from automat import TypifiedBuilder
 
 
@@ -21,7 +20,7 @@ class Turnstile(Protocol):
         "The fare was paid."
 
 
-def buildBuilder() -> Callable[[Lock], Turnstile]:
+def buildMachine() -> Callable[[Lock], Turnstile]:
     builder = TypifiedBuilder(Turnstile, Lock)
     locked = builder.state("Locked")
     unlocked = builder.state("Unlocked")
@@ -41,7 +40,7 @@ def buildBuilder() -> Callable[[Lock], Turnstile]:
     return builder.build()
 
 
-TurnstileImpl = buildBuilder()
+TurnstileImpl = buildMachine()
 turner = TurnstileImpl(Lock())
 print("Paying fare 1.")
 turner.fare_paid(1)
