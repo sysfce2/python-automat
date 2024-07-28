@@ -34,6 +34,17 @@ AnyCallable = TypeVar("AnyCallable", bound=Callable[..., Any])
 DataArgs = ParamSpec("DataArgs")
 
 
+def pep614(t: R) -> R:
+    """
+    This is a workaround for Python 3.8, which has U{some restrictions on its
+    grammar for decorators <https://peps.python.org/pep-0614/>}, and makes
+    C{@state.to(other).upon(Protocol.input)} invalid syntax; for code that
+    needs to run on these older Python versions, you can do
+    C{@pep614(state.to(other).upon(Protocol.input))} instead.
+    """
+    return t
+
+
 @dataclass()
 class TransitionRegistrar(Generic[P, P1, R]):
     """

@@ -2,7 +2,7 @@
 from ._methodical import MethodicalMachine
 from ._core import NoTransition
 from ._typical import TypicalBuilder, Enter
-from ._typified import TypifiedBuilder, TypifiedState
+from ._typified import TypifiedBuilder, TypifiedState, pep614
 
 __all__ = [
     "MethodicalMachine",
@@ -11,4 +11,5 @@ __all__ = [
     "TypifiedState",
     "NoTransition",
     "Enter",
+    "pep614",
 ]
