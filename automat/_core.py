@@ -16,29 +16,27 @@ else:
     from typing_extensions import TypeAlias
 
 _NO_STATE = "<no state>"
+State = TypeVar("State")
+Input = TypeVar("Input")
+Output = TypeVar("Output")
 
 
-class NoTransition(Exception):
+class NoTransition(Exception, Generic[State, Input]):
     """
     A finite state machine in C{state} has no transition for C{symbol}.
 
-    @param state: the finite state machine's state at the time of the
-        illegal transition.
+    @param state: the finite state machine's state at the time of the illegal
+        transition.
 
     @param symbol: the input symbol for which no transition exists.
     """
 
-    def __init__(self, state, symbol):
+    def __init__(self, state: State, symbol: Input):
         self.state = state
         self.symbol = symbol
         super(Exception, self).__init__(
             "no transition for {} in {}".format(symbol, state)
         )
-
-
-State = TypeVar("State")
-Input = TypeVar("Input")
-Output = TypeVar("Output")
 
 
 class Automaton(Generic[State, Input, Output]):
@@ -60,14 +58,14 @@ class Automaton(Generic[State, Input, Output]):
         self._unhandledTransition = None
 
     @property
-    def initialState(self):
+    def initialState(self) -> State:
         """
         Return this automaton's initial state.
         """
         return self._initialState
 
     @initialState.setter
-    def initialState(self, state):
+    def initialState(self, state: State) -> None:
         """
         Set this automaton's initial state.  Raises a ValueError if
         this automaton already has an initial state.
@@ -106,13 +104,13 @@ class Automaton(Generic[State, Input, Output]):
     def unhandledTransition(self, outState, outputSymbols):
         self._unhandledTransition = (outState, outputSymbols)
 
-    def allTransitions(self):
+    def allTransitions(self) -> frozenset[tuple[State, Input, State, Sequence[Output]]]:
         """
         All transitions.
         """
         return frozenset(self._transitions)
 
-    def inputAlphabet(self):
+    def inputAlphabet(self) -> set[Input]:
         """
         The full set of symbols acceptable to this automaton.
         """
@@ -121,7 +119,7 @@ class Automaton(Generic[State, Input, Output]):
             for (inState, inputSymbol, outState, outputSymbol) in self._transitions
         }
 
-    def outputAlphabet(self):
+    def outputAlphabet(self) -> set[Output]:
         """
         The full set of symbols which can be produced by this automaton.
         """
