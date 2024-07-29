@@ -1,5 +1,5 @@
 from typing import Callable, Protocol
-from automat import TypifiedBuilder
+from automat import TypeMachineBuilder
 
 
 class Lock:
@@ -21,7 +21,7 @@ class Turnstile(Protocol):
 
 
 def buildMachine() -> Callable[[Lock], Turnstile]:
-    builder = TypifiedBuilder(Turnstile, Lock)
+    builder = TypeMachineBuilder(Turnstile, Lock)
     locked = builder.state("Locked")
     unlocked = builder.state("Unlocked")
 

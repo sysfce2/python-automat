@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from itertools import count
 from typing import Callable, List, Protocol
 
-from automat import TypifiedBuilder
+from automat import TypeMachineBuilder
 
 
 # scaffolding; no state machines yet
@@ -85,11 +85,11 @@ class ConnectionState:
 
 def buildMachine() -> Callable[[ConnectionState], ConnectionCoordinator]:
 
-    machine = TypifiedBuilder(ConnectionCoordinator, ConnectionState)
-    Initial = machine.state("Initial")
-    Requested = machine.state("Requested")
-    AtCapacity = machine.state("AtCapacity")
-    CleaningUp = machine.state("CleaningUp")
+    builder = TypeMachineBuilder(ConnectionCoordinator, ConnectionState)
+    Initial = builder.state("Initial")
+    Requested = builder.state("Requested")
+    AtCapacity = builder.state("AtCapacity")
+    CleaningUp = builder.state("CleaningUp")
 
     Requested.to(AtCapacity).upon(ConnectionCoordinator.atCapacity).returns(None)
     Requested.loop().upon(ConnectionCoordinator.headroom).returns(None)
@@ -145,7 +145,7 @@ def buildMachine() -> Callable[[ConnectionState], ConnectionCoordinator]:
         while core.performer.activeTasks:
             core.performer.activeTasks[-1].stop()
 
-    return machine.build()
+    return builder.build()
 
 
 ConnectionMachine = buildMachine()

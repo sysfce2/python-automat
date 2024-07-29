@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Protocol
 
-from automat import TypifiedBuilder, TypifiedState
+from automat import TypeMachineBuilder, TypifiedState
 
 
 @dataclass
@@ -27,13 +27,13 @@ class BrewCore:
 
 
 
-def _coffee_machine() -> TypifiedBuilder[Brewer, BrewCore]:
+def _coffee_machine() -> TypeMachineBuilder[Brewer, BrewCore]:
     """
     Best practice: these functions are all fed in to the builder, they don't
     need to call each other, so they don't need to be defined globally.  Use a
     function scope to avoid littering a module with states and such.
     """
-    builder = TypifiedBuilder[Brewer, BrewCore](BrewCore)
+    builder = TypeMachineBuilder[Brewer, BrewCore](BrewCore)
 
     def make_bean_state(
         # these two are part of the signature

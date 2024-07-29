@@ -219,7 +219,7 @@ class DataToSelfNoData(Generic[InputProtocol, Core, Data]):
 @dataclass(frozen=True)
 class TypifiedState(Generic[InputProtocol, Core]):
     name: str
-    builder: TypifiedBuilder[InputProtocol, Core]
+    builder: TypeMachineBuilder[InputProtocol, Core]
 
     def loop(self) -> NoToNo[InputProtocol, Core]:
         """
@@ -251,6 +251,9 @@ class TypifiedState(Generic[InputProtocol, Core]):
             OtherFactoryParams,
         ]
     ):
+        """
+        Declare a state transition to a new state.
+        """
         if isinstance(state, TypifiedState):
             return NoToNo(self, state)
         else:
@@ -271,26 +274,8 @@ class TypifiedState(Generic[InputProtocol, Core]):
 @dataclass(frozen=True)
 class TypifiedDataState(Generic[InputProtocol, Core, Data, FactoryParams]):
     name: str
-    builder: TypifiedBuilder[InputProtocol, Core]
+    builder: TypeMachineBuilder[InputProtocol, Core]
     factory: Callable[Concatenate[InputProtocol, Core, FactoryParams], Data]
-
-    def data_setup(self) -> Decorator[[InputProtocol, Core, Data], None]:
-        def decorator(
-            decoratee: Callable[[InputProtocol, Core, Data], None]
-        ) -> Callable[[InputProtocol, Core, Data], None]:
-            # FIXME: actually register setup
-            return decoratee
-
-        return decorator
-
-    def data_cleanup(self) -> Decorator[[InputProtocol, Core, Data], None]:
-        def decorator(
-            decoratee: Callable[[InputProtocol, Core, Data], None]
-        ) -> Callable[[InputProtocol, Core, Data], None]:
-            # FIXME: actually register cleanup
-            return decoratee
-
-        return decorator
 
     def loop(self) -> DataToSelf[InputProtocol, Core, Data]:
         """
@@ -318,6 +303,9 @@ class TypifiedDataState(Generic[InputProtocol, Core, Data, FactoryParams]):
         DataToNo[InputProtocol, Core, Data]
         | DataToData[InputProtocol, Core, Data, OtherFactoryParams, OtherData]
     ):
+        """
+        Declare a state transition to a new state.
+        """
         if isinstance(state, TypifiedState):
             return DataToNo(self, state)
         else:
@@ -361,13 +349,12 @@ class TypifiedBase(Generic[Core]):
     __automat_postponed__: list[Callable[[], None]] | None = None
 
 
-
 def implementMethod(
     method: Callable[..., object],
 ) -> Callable[..., object]:
     """
     Construct a function for populating in the synthetic provider of the Input
-    Protocol to a L{TypifiedBuilder}.  It should have a signature matching that
+    Protocol to a L{TypeMachineBuilder}.  It should have a signature matching that
     of the C{method} parameter, a function from that protocol.
     """
 
@@ -530,8 +517,9 @@ class TypifiedMachine(Generic[InputProtocol, Core]):
             outputAsString=lambda output: output.__name__,
         )
 
+
 @dataclass(eq=False)
-class TypifiedBuilder(Generic[InputProtocol, Core]):
+class TypeMachineBuilder(Generic[InputProtocol, Core]):
     protocol: ProtocolAtRuntime[InputProtocol]
     core_type: type[Core]
     _automaton: Automaton[
@@ -554,7 +542,13 @@ class TypifiedBuilder(Generic[InputProtocol, Core]):
         self,
         name: str,
         dataFactory: Callable[Concatenate[InputProtocol, Core, P], Data] | None = None,
+    ) -> (
+        TypifiedState[InputProtocol, Core]
+        | TypifiedDataState[InputProtocol, Core, Data, P]
     ):
+        """
+        Construct a state.
+        """
         if dataFactory is None:
             state = TypifiedState(name, self)
             if self._initial:

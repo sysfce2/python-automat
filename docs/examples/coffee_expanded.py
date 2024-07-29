@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Protocol
 
-from automat import TypifiedBuilder
+from automat import TypeMachineBuilder
 
 
 @dataclass
@@ -77,13 +77,13 @@ class BrewCore:
     brewing: Mixture | None = None
 
 
-def _coffee_machine() -> TypifiedBuilder[_BrewerInternals, BrewCore]:
+def _coffee_machine() -> TypeMachineBuilder[_BrewerInternals, BrewCore]:
     """
     Best practice: these functions are all fed in to the builder, they don't
     need to call each other, so they don't need to be defined globally.  Use a
     function scope to avoid littering a module with states and such.
     """
-    builder = TypifiedBuilder(_BrewerInternals, BrewCore)
+    builder = TypeMachineBuilder(_BrewerInternals, BrewCore)
     # reveal_type(builder)
 
     not_ready = builder.state("HaveBeans")
@@ -147,19 +147,6 @@ def _coffee_machine() -> TypifiedBuilder[_BrewerInternals, BrewCore]:
         carafe: Carafe,
     ) -> None:
         print("ready output")
-
-    # all transitions into this state should invoke this at some point in the
-    # transition; after or before the main function?
-    @ready.data_setup()
-    def ready_now(brewer: _BrewerInternals, core: BrewCore, ready: Ready) -> None:
-        core.ready_light.on = True
-
-    # all transitions out should invoke this
-    @ready.data_cleanup()
-    def not_ready_anymore(
-        brewer: _BrewerInternals, core: BrewCore, ready: Ready
-    ) -> None:
-        core.ready_light.on = False
 
     @ready.to(brewing).upon(Brewer.brew_button)
     def brew(brewer: _BrewerInternals, core: BrewCore, ready: Ready) -> None:
