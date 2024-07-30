@@ -88,3 +88,6 @@ class TypeMachineTests(TestCase):
         machine.increment()
         machine.increment()
         self.assertEqual(machine.stop(), 2)
+        machine.start()
+        machine.increment()
+        self.assertEqual(machine.stop(), 1)
