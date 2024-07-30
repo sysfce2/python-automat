@@ -385,13 +385,7 @@ def implementMethod(
             return None
         postponed = self.__automat_postponed__ = []
         try:
-            try:
-                [outputs, tracer] = transitioner.transition(method_input)
-            except:
-                import traceback
-
-                traceback.print_exc()
-                raise
+            [outputs, tracer] = transitioner.transition(method_input)
             result: Any = None
             for output in outputs:
                 # here's the idea: there will be a state-setup output and a
