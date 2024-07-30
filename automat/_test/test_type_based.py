@@ -14,6 +14,11 @@ class TestProtocol(Protocol):
         "Give a value specific to the given state."
 
 
+class ArgTaker(Protocol):
+    def takeSomeArgs(self, arg1: int, arg2: str) -> None:
+        pass
+
+
 class NoOpCore:
     "Just an object, you know?"
 
@@ -39,9 +44,14 @@ def buildTestBuilder() -> Callable[[NoOpCore], TestProtocol]:
 
 machineFactory = buildTestBuilder()
 
+
 def needsSomething(proto: TestProtocol, core: NoOpCore, value: str) -> int:
     "we need data to build this state"
     return 3
+
+
+def needsNothing(proto: ArgTaker, core: NoOpCore) -> str:
+    return "state-specific data"
 
 
 class SimpleProtocol(Protocol):
@@ -114,6 +124,7 @@ class TypeMachineTests(TestCase):
 
     def test_dataToData(self) -> None:
         builder = TypeMachineBuilder(TestProtocol, NoOpCore)
+
         @dataclass
         class Data1:
             value: int
@@ -127,6 +138,7 @@ class TypeMachineTests(TestCase):
         appending = builder.state("appending", lambda proto, core: Data2([]))
 
         initial.to(counting).upon(TestProtocol.change).returns(None)
+
         @pep614(counting.loop().upon(TestProtocol.value))
         def countup(p: TestProtocol, c: NoOpCore, d: Data1) -> int:
             d.value *= 2
@@ -166,4 +178,14 @@ class TypeMachineTests(TestCase):
         uponInput2 = toState2.upon(TestProtocol.change)  # type:ignore[arg-type]
         uponInput2.returns(None)
 
-
+    def test_dataFactoryNoArgs(self) -> None:
+        """
+        Inverse of C{test_dataFactoryArgs} where the data factory specifically
+        does I{not} take arguments, but the input specified does.
+        """
+        builder = TypeMachineBuilder(ArgTaker, NoOpCore)
+        initial = builder.state("initial")
+        data = builder.state("data", needsNothing)
+        toState = initial.to(data)
+        uponInput = toState.upon(ArgTaker.takeSomeArgs)  # type:ignore[arg-type]
+        uponInput.returns(None)
