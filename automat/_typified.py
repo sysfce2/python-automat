@@ -136,9 +136,11 @@ class NoToData(Generic[InputProtocol, Core, FactoryParams]):
     new: TypifiedDataState[InputProtocol, Core, object, FactoryParams]
 
     def upon(
-        self, input: Callable[Concatenate[InputProtocol, P], R]
+        self, input: Callable[Concatenate[InputProtocol, FactoryParams], R]
     ) -> TransitionRegistrar[
-        Concatenate[InputProtocol, Core, P], Concatenate[InputProtocol, P], R
+        Concatenate[InputProtocol, Core, FactoryParams],
+        Concatenate[InputProtocol, FactoryParams],
+        R,
     ]:
         return TransitionRegistrar(input, self.old, self.new)
 
@@ -542,9 +544,7 @@ class TypeMachineBuilder(Generic[InputProtocol, Core]):
         Callable[..., object],
     ] = field(default_factory=Automaton)
     _initial: bool = True
-    _registrars: list[TransitionRegistrar[Any, Any, Any]] = field(
-        default_factory=list
-    )
+    _registrars: list[TransitionRegistrar[Any, Any, Any]] = field(default_factory=list)
 
     @overload
     def state(self, name: str) -> TypifiedState[InputProtocol, Core]: ...

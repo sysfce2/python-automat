@@ -39,6 +39,10 @@ def buildTestBuilder() -> Callable[[NoOpCore], TestProtocol]:
 
 machineFactory = buildTestBuilder()
 
+def needsSomething(proto: TestProtocol, core: NoOpCore, value: str) -> int:
+    "we need data to build this state"
+    return 3
+
 
 class SimpleProtocol(Protocol):
     def method(self) -> None:
@@ -143,4 +147,23 @@ class TypeMachineTests(TestCase):
         machine.change()
         self.assertEqual(machine.value(), 3)
         self.assertEqual(machine.value(), 6)
+
+    def test_dataFactoryArgs(self) -> None:
+        """
+        Any data factory that takes arguments will constrain the allowed
+        signature of all protocol methods that transition into that state.
+        """
+        builder = TypeMachineBuilder(TestProtocol, NoOpCore)
+        initial = builder.state("initial")
+        data = builder.state("data", needsSomething)
+        data2 = builder.state("data2", needsSomething)
+        toState = initial.to(data)
+
+        # 'assertions' in the form of expected type errors:
+        uponInput = toState.upon(TestProtocol.change)  # type:ignore[arg-type]
+        uponInput.returns(None)
+        toState2 = data.to(data2)
+        uponInput2 = toState2.upon(TestProtocol.change)  # type:ignore[arg-type]
+        uponInput2.returns(None)
+
 
