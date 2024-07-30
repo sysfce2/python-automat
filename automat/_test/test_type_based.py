@@ -40,6 +40,11 @@ def buildTestBuilder() -> Callable[[NoOpCore], TestProtocol]:
 machineFactory = buildTestBuilder()
 
 
+class SimpleProtocol(Protocol):
+    def method(self) -> None:
+        "A method"
+
+
 class TypeMachineTests(TestCase):
 
     def test_oneTransition(self) -> None:
@@ -91,3 +96,14 @@ class TypeMachineTests(TestCase):
         machine.start()
         machine.increment()
         self.assertEqual(machine.stop(), 1)
+
+    def test_incompleteTransitionDefinition(self) -> None:
+        builder = TypeMachineBuilder(SimpleProtocol, NoOpCore)
+        sample = builder.state("sample")
+        sample.loop().upon(SimpleProtocol.method)  # oops, no '.returns(None)'
+        with self.assertRaises(ValueError) as raised:
+            builder.build()
+        self.assertIn(
+            "incomplete transition from sample to sample upon SimpleProtocol.method",
+            str(raised.exception),
+        )

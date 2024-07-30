@@ -1,3 +1,4 @@
+# -*- test-case-name: automat._test.test_type_based -*-
 from __future__ import annotations
 
 import sys
@@ -61,6 +62,9 @@ class TransitionRegistrar(Generic[P, P1, R]):
     _result: R | None = None
     _callback: Callable[P, R] | None = None
 
+    def __post_init__(self) -> None:
+        self._old.builder._registrars.append(self)
+
     def __call__(self, /, impl: Callable[P, R]) -> Callable[P, R]:
         """
         Finalize it with C{__call__} to indicate that there is an
@@ -86,6 +90,21 @@ class TransitionRegistrar(Generic[P, P1, R]):
         """
         self._result = result
         self(lambda *args, **kwargs: result)
+
+    def _checkComplete(self) -> None:
+        """
+        Raise an exception if the user forgot to decorate a method
+        implementation or supply a return value for this transition.
+        """
+        # TODO: point at the line where `.to`/`.loop`/`.upon` are called so the
+        # user can more immediately see the incomplete transition
+        if not self._callback:
+            raise ValueError(
+                f"incomplete transition from {self._old.name} to "
+                f"{self._new.name} upon {self._signature.__qualname__}: "
+                "remember to use the transition as a decorator or call "
+                "`.returns` on it."
+            )
 
 
 @dataclass(frozen=True)
@@ -523,6 +542,9 @@ class TypeMachineBuilder(Generic[InputProtocol, Core]):
         Callable[..., object],
     ] = field(default_factory=Automaton)
     _initial: bool = True
+    _registrars: list[TransitionRegistrar[Any, Any, Any]] = field(
+        default_factory=list
+    )
 
     @overload
     def state(self, name: str) -> TypifiedState[InputProtocol, Core]: ...
@@ -554,6 +576,11 @@ class TypeMachineBuilder(Generic[InputProtocol, Core]):
             return TypifiedDataState(name, self, dataFactory)
 
     def build(self) -> Callable[[Core], InputProtocol]:
+        # incompleteness check
+
+        for registrar in self._registrars:
+            registrar._checkComplete()
+
         namespace = {
             method_name: implementMethod(getattr(self.protocol, method_name))
             for method_name in actuallyDefinedProtocolMethods(self.protocol)
