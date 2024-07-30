@@ -107,3 +107,40 @@ class TypeMachineTests(TestCase):
             "incomplete transition from sample to sample upon SimpleProtocol.method",
             str(raised.exception),
         )
+
+    def test_dataToData(self) -> None:
+        builder = TypeMachineBuilder(TestProtocol, NoOpCore)
+        @dataclass
+        class Data1:
+            value: int
+
+        @dataclass
+        class Data2:
+            stuff: list[str]
+
+        initial = builder.state("initial")
+        counting = builder.state("counting", lambda proto, core: Data1(1))
+        appending = builder.state("appending", lambda proto, core: Data2([]))
+
+        initial.to(counting).upon(TestProtocol.change).returns(None)
+        @pep614(counting.loop().upon(TestProtocol.value))
+        def countup(p: TestProtocol, c: NoOpCore, d: Data1) -> int:
+            d.value *= 2
+            return d.value
+
+        counting.to(appending).upon(TestProtocol.change).returns(None)
+
+        @pep614(appending.loop().upon(TestProtocol.value))
+        def appendup(p: TestProtocol, c: NoOpCore, d: Data2) -> int:
+            d.stuff.extend("abc")
+            return len(d.stuff)
+
+        machineFactory = builder.build()
+        machine = machineFactory(NoOpCore())
+        machine.change()
+        self.assertEqual(machine.value(), 2)
+        self.assertEqual(machine.value(), 4)
+        machine.change()
+        self.assertEqual(machine.value(), 3)
+        self.assertEqual(machine.value(), 6)
+
