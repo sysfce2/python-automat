@@ -156,10 +156,10 @@ class DataToNo(Generic[InputProtocol, Core, Data]):
     new: TypifiedState[InputProtocol, Core]
 
     def upon(
-        self, input: Callable[Concatenate[InputProtocol, FactoryParams], R]
+        self, input: Callable[Concatenate[InputProtocol, P], R]
     ) -> TransitionRegistrar[
-        Concatenate[InputProtocol, Core, Data, FactoryParams],
-        Concatenate[InputProtocol, FactoryParams],
+        Concatenate[InputProtocol, Core, Data, P],
+        Concatenate[InputProtocol, P],
         R,
     ]:
         return TransitionRegistrar(input, self.old, self.new)
