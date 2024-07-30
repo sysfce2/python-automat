@@ -15,7 +15,7 @@ class TestProtocol(Protocol):
 
 
 class ArgTaker(Protocol):
-    def takeSomeArgs(self, arg1: int, arg2: str) -> None:
+    def takeSomeArgs(self, arg1: int=0, arg2: str="") -> None:
         pass
 
 
