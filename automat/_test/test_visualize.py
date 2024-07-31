@@ -1,14 +1,16 @@
 from __future__ import print_function
-import functools
 
+import functools
 import os
 import subprocess
+from typing import Protocol
 from unittest import TestCase, skipIf
 
 import attr
+from automat import TypeMachineBuilder
 
 from .._methodical import MethodicalMachine
-
+from .._typified import TypifiedMachine
 from .test_discover import isTwistedInstalled
 
 
@@ -64,6 +66,23 @@ def sampleMachine():
     so = SampleObject()
     so.go()
     return mm
+
+
+def sampleTypeMachine() -> TypifiedMachine:
+    """
+    Create a sample L{TypifiedMachine} with some sample states.
+    """
+
+    # mm = MethodicalMachine()
+    class Sample(Protocol):
+        def go(self) -> None: ...
+    class Core: ...
+
+    builder = TypeMachineBuilder(Sample, Core)
+    begin = builder.state("begin")
+    end = builder.state("end")
+    begin.upon(Sample.go).to(end).returns(None)
+    return builder.build()
 
 
 @skipIf(not isGraphvizModuleInstalled(), "Graphviz module is not installed.")
@@ -247,6 +266,16 @@ class SpotChecks(TestCase):
         inputs, outputs in the state machine.
         """
         gvout = "".join(sampleMachine().asDigraph())
+        self.assertIn("begin", gvout)
+        self.assertIn("end", gvout)
+        self.assertIn("go", gvout)
+        self.assertIn("out", gvout)
+    def test_containsTypeMachineFeatures(self):
+        """
+        The output of L{graphviz} should contain the names of the states,
+        inputs, outputs in the state machine.
+        """
+        gvout = "".join(sampleTypeMachine().asDigraph())
         self.assertIn("begin", gvout)
         self.assertIn("end", gvout)
         self.assertIn("go", gvout)

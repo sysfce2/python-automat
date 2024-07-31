@@ -521,7 +521,7 @@ class TypeMachineBuilder(Generic[InputProtocol, Core]):
             assert not self._initial, "initial state cannot require state-specific data"
             return TypifiedDataState(name, self, dataFactory)
 
-    def build(self) -> Callable[[Core], InputProtocol]:
+    def build(self) -> TypifiedMachine[InputProtocol, Core]:
         # incompleteness check
 
         for registrar in self._registrars:
