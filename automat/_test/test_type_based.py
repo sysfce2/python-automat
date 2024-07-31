@@ -229,3 +229,82 @@ class TypeMachineTests(TestCase):
             .to(data)  # type:ignore[arg-type]
             .returns(None)
         )
+
+    def test_reentrancy(self) -> None:
+        """
+        During the execution of a transition behavior implementation function,
+        you may invoke other methods on your state machine.  However, the
+        execution of the behavior of those methods will be deferred until the
+        current behavior method is done executing.  In order to implement that
+        deferral, we restrict the set of methods that can be invoked to those
+        that return None.
+
+        @note: it may be possible to implement deferral via Awaitables or
+            Deferreds later, but we are starting simple.
+        """
+
+        class SomeMethods(Protocol):
+            def start(self) -> None:
+                "Start the machine."
+
+            def later(self) -> None:
+                "Do some deferrable work."
+
+        builder = TypeMachineBuilder(SomeMethods, NoOpCore)
+
+        initial = builder.state("initial")
+        second = builder.state("second")
+
+        order = []
+
+        @pep614(initial.upon(SomeMethods.start).to(second))
+        def startup(methods: SomeMethods, core: NoOpCore) -> None:
+            order.append("startup")
+            methods.later()
+            order.append("startup done")
+
+        @pep614(second.upon(SomeMethods.later).loop())
+        def later(methods: SomeMethods, core: NoOpCore) -> None:
+            order.append("later")
+
+        machineFactory = builder.build()
+        machine = machineFactory(NoOpCore())
+        machine.start()
+        self.assertEqual(order, ["startup", "startup done", "later"])
+
+    def test_reentrancyNotNoneError(self) -> None:
+        class SomeMethods(Protocol):
+            def start(self) -> None:
+                "Start the machine."
+
+            def later(self) -> int:
+                "Do some deferrable work."
+
+        builder = TypeMachineBuilder(SomeMethods, NoOpCore)
+
+        initial = builder.state("initial")
+        second = builder.state("second")
+
+        order = []
+
+        @pep614(initial.upon(SomeMethods.start).to(second))
+        def startup(methods: SomeMethods, core: NoOpCore) -> None:
+            order.append("startup")
+            methods.later()
+            order.append("startup done")
+
+        @pep614(second.upon(SomeMethods.later).loop())
+        def later(methods: SomeMethods, core: NoOpCore) -> int:
+            order.append("later")
+            return 3
+
+        machineFactory = builder.build()
+        machine = machineFactory(NoOpCore())
+        with self.assertRaises(RuntimeError):
+            machine.start()
+        self.assertEqual(order, ["startup"])
+        # We do actually do the state transition, which happens *before* the
+        # output is generated; TODO: maybe we should have exception handling
+        # that transitions into an error state that requires explicit recovery?
+        self.assertEqual(machine.later(), 3)
+        self.assertEqual(order, ["startup", "later"])
