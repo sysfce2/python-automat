@@ -47,11 +47,7 @@ def actuallyDefinedProtocolMethods(protocol: object) -> frozenset[str]:
 def _fixAnnotation(method: Callable[..., object], it: object, ann: str) -> None:
     annotation = getattr(it, ann)
     if isinstance(annotation, str):
-        scope = getattr(method, "__globals__", None)
-        if scope is None:
-            module = sys.modules[method.__module__]
-            scope = module.__dict__
-        setattr(it, ann, eval(annotation, scope))
+        setattr(it, ann, eval(annotation, method.__globals__))
 
 
 def _liveSignature(method: Callable[..., object]) -> Signature:
