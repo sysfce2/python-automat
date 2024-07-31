@@ -17,7 +17,7 @@ ProtocolAtRuntime = Callable[[], T]
 
 
 def runtime_name(x: ProtocolAtRuntime[T]) -> str:
-    return x.__name__  # type:ignore[attr-defined]
+    return x.__name__
 
 
 from inspect import getmembers, isfunction
@@ -51,7 +51,7 @@ def _fixAnnotation(method: Callable[..., object], it: object, ann: str) -> None:
         if scope is None:
             module = sys.modules[method.__module__]
             scope = module.__dict__
-        setattr(it, ann, eval(annotation, scope))  # type:ignore
+        setattr(it, ann, eval(annotation, scope))
 
 
 def _liveSignature(method: Callable[..., object]) -> Signature:
