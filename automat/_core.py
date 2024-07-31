@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sys
 from itertools import chain
-from typing import Callable, Generic, Sequence, TypeVar
+from typing import Callable, Generic, Optional, Sequence, TypeVar
 
 if sys.version_info >= (3, 10):
     from typing import TypeAlias
@@ -151,7 +151,7 @@ class Automaton(Generic[State, Input, Output]):
 
     def outputForInput(
         self, inState: State, inputSymbol: Input
-    ) -> tuple[State, list[Output]]:
+    ) -> tuple[State, Sequence[Output]]:
         """
         A 2-tuple of (outState, outputSymbols) for inputSymbol.
         """
