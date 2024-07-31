@@ -59,6 +59,22 @@ class SimpleProtocol(Protocol):
         "A method"
 
 
+class Counter(Protocol):
+    def start(self) -> None:
+        "enter the counting state"
+
+    def increment(self) -> None:
+        "increment the counter"
+
+    def stop(self) -> int:
+        "stop"
+
+
+@dataclass
+class Count:
+    value: int = 0
+
+
 class TypeMachineTests(TestCase):
 
     def test_oneTransition(self) -> None:
@@ -73,20 +89,6 @@ class TypeMachineTests(TestCase):
         self.assertEqual(machine.value(), 3)
 
     def test_stateSpecificData(self) -> None:
-
-        class Counter(Protocol):
-            def start(self) -> None:
-                "enter the counting state"
-
-            def increment(self) -> None:
-                "increment the counter"
-
-            def stop(self) -> int:
-                "stop"
-
-        @dataclass
-        class Count:
-            value: int = 0
 
         builder = TypeMachineBuilder(Counter, NoOpCore)
         initial = builder.state("initial")
@@ -108,6 +110,40 @@ class TypeMachineTests(TestCase):
         machine.increment()
         self.assertEqual(machine.stop(), 2)
         machine.start()
+        machine.increment()
+        self.assertEqual(machine.stop(), 1)
+
+    def test_stateSpecificDataWithoutData(self) -> None:
+        """
+        To facilitate common implementations of transition behavior methods,
+        sometimes you want to implement a transition within a data state
+        without taking a data parameter.  To do this, pass the 'nodata=True'
+        parameter to 'upon'.
+        """
+        builder = TypeMachineBuilder(Counter, NoOpCore)
+        initial = builder.state("initial")
+        counting = builder.state("counting", lambda machine, core: Count())
+        startCalls = []
+
+        @pep614(initial.upon(Counter.start).to(counting))
+        @pep614(counting.upon(Counter.start, nodata=True).loop())
+        def start(counter: Counter, core: NoOpCore) -> None:
+            startCalls.append("started!")
+
+        @pep614(counting.upon(Counter.increment).loop())
+        def incf(counter: Counter, core: NoOpCore, count: Count) -> None:
+            count.value += 1
+
+        @pep614(counting.upon(Counter.stop).to(initial))
+        def finish(counter: Counter, core: NoOpCore, count: Count) -> int:
+            return count.value
+
+        machineFactory = builder.build()
+        machine = machineFactory(NoOpCore())
+        machine.start()
+        self.assertEqual(len(startCalls), 1)
+        machine.start()
+        self.assertEqual(len(startCalls), 2)
         machine.increment()
         self.assertEqual(machine.stop(), 1)
 
@@ -174,11 +210,11 @@ class TypeMachineTests(TestCase):
         # 'assertions' in the form of expected type errors:
         # (no data -> data)
         uponNoData = initial.upon(TestProtocol.change)
-        uponNoData.to(data)           # type:ignore[arg-type]
+        uponNoData.to(data)  # type:ignore[arg-type]
 
         # (data -> data)
         uponData = data.upon(TestProtocol.change)
-        uponData.to(data2)      # type:ignore[arg-type]
+        uponData.to(data2)  # type:ignore[arg-type]
 
     def test_dataFactoryNoArgs(self) -> None:
         """

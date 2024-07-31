@@ -3,7 +3,16 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass, field
-from typing import Any, Callable, Generic, Iterable, TypeVar, overload, TYPE_CHECKING
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Generic,
+    Iterable,
+    Literal,
+    TypeVar,
+    overload,
+)
 
 if TYPE_CHECKING:
     from graphviz import Digraph
@@ -116,143 +125,16 @@ class TransitionRegistrar(Generic[P, P1, R]):
             )
 
 
-@dataclass(frozen=True)
-class NoToNo(Generic[InputProtocol, Core]):
-    """
-    A transition registrar factory whose input method requires neither a data
-    parameter nor a factory-signature match.
-    """
-
-    old: TypifiedState[InputProtocol, Core]
-    new: TypifiedState[InputProtocol, Core]
-
-    def upon(
-        self, input: Callable[Concatenate[InputProtocol, P], R]
-    ) -> TransitionRegistrar[
-        Concatenate[InputProtocol, Core, P], Concatenate[InputProtocol, P], R
-    ]:
-        return TransitionRegistrar(input, self.old, self.new)
-
-
-@dataclass(frozen=True)
-class NoToData(Generic[InputProtocol, Core, FactoryParams]):
-    """
-    A transition registrar factory whose input method does not take a data
-    parameter but does require a factory-signature match.
-    """
-
-    old: TypifiedState[InputProtocol, Core]
-    new: TypifiedDataState[InputProtocol, Core, object, FactoryParams]
-
-    def upon(
-        self, input: Callable[Concatenate[InputProtocol, FactoryParams], R]
-    ) -> TransitionRegistrar[
-        Concatenate[InputProtocol, Core, FactoryParams],
-        Concatenate[InputProtocol, FactoryParams],
-        R,
-    ]:
-        return TransitionRegistrar(input, self.old, self.new)
-
-
-@dataclass(frozen=True)
-class DataToNo(Generic[InputProtocol, Core, Data]):
-    """
-    A transition registrar factory whose input method does take a data
-    parameter but does not require a factory-signature match.
-    """
-
-    old: TypifiedDataState[InputProtocol, Core, Data, Any]
-    new: TypifiedState[InputProtocol, Core]
-
-    def upon(
-        self, input: Callable[Concatenate[InputProtocol, P], R]
-    ) -> TransitionRegistrar[
-        Concatenate[InputProtocol, Core, Data, P],
-        Concatenate[InputProtocol, P],
-        R,
-    ]:
-        return TransitionRegistrar(input, self.old, self.new)
-
-
-@dataclass(frozen=True)
-class DataToData(Generic[InputProtocol, Core, Data, FactoryParams, OtherData]):
-    """
-    A transition registrar factory whose input method both takes a data
-    parameter and requires a factory-signature match.
-    """
-
-    old: TypifiedDataState[InputProtocol, Core, Data, Any]
-    new: TypifiedDataState[InputProtocol, Core, OtherData, FactoryParams]
-
-    def upon(
-        self, input: Callable[Concatenate[InputProtocol, FactoryParams], R]
-    ) -> TransitionRegistrar[
-        Concatenate[InputProtocol, Core, Data, FactoryParams],
-        Concatenate[InputProtocol, FactoryParams],
-        R,
-    ]:
-        return TransitionRegistrar(input, self.old, self.new)
-
-    def dataless(
-        self,
-    ) -> DataToDataNoData[InputProtocol, Core, Data, FactoryParams, OtherData]:
-        return DataToDataNoData(self.old, self.new)
-
-
-@dataclass(frozen=True)
-class DataToSelf(Generic[InputProtocol, Core, Data]):
-    """
-    A transition registrar factory whose input method takes a data parameter,
-    but who does not require a factory-signature match specifically because it
-    is transitioning back to itself.
-    """
-
-    state: TypifiedDataState[InputProtocol, Core, Data, Any]
-
-    def upon(
-        self, input: Callable[Concatenate[InputProtocol, P], R]
-    ) -> TransitionRegistrar[
-        Concatenate[InputProtocol, Core, Data, P], Concatenate[InputProtocol, P], R
-    ]:
-        return TransitionRegistrar(input, self.state, self.state)
-
-    def dataless(self) -> DataToSelfNoData[InputProtocol, Core, Data]:
-        return DataToSelfNoData(self.state)
-
-
-# FIXME: better names for the next two classes
-@dataclass(frozen=True)
-class DataToDataNoData(Generic[InputProtocol, Core, Data, FactoryParams, OtherData]):
-    old: TypifiedDataState[InputProtocol, Core, Data, Any]
-    new: TypifiedDataState[InputProtocol, Core, OtherData, FactoryParams]
-
-    def upon(
-        self, input: Callable[Concatenate[InputProtocol, P], R]
-    ) -> TransitionRegistrar[
-        Concatenate[InputProtocol, Core, P], Concatenate[InputProtocol, P], R
-    ]:
-        return TransitionRegistrar(input, self.old, self.new, True)
-
-
-@dataclass(frozen=True)
-class DataToSelfNoData(Generic[InputProtocol, Core, Data]):
-    state: TypifiedDataState[InputProtocol, Core, Data, Any]
-
-    def upon(
-        self, input: Callable[Concatenate[InputProtocol, P], R]
-    ) -> TransitionRegistrar[
-        Concatenate[InputProtocol, Core, P], Concatenate[InputProtocol, P], R
-    ]:
-        return TransitionRegistrar(input, self.state, self.state, True)
-
-
 @dataclass
 class UponFromNo(Generic[InputProtocol, Core, P, R]):
     """
     Type parameter P: the signature of the input method.
     """
 
-    old: TypifiedState[InputProtocol, Core]
+    old: (
+        TypifiedState[InputProtocol, Core]
+        | TypifiedDataState[InputProtocol, Core, Any, ...]
+    )
     input: Callable[Concatenate[InputProtocol, P], R]
 
     @overload
@@ -285,14 +167,14 @@ class UponFromNo(Generic[InputProtocol, Core, P, R]):
         """
         Declare a state transition to a new state.
         """
-        return TransitionRegistrar(self.input, self.old, state)
+        return TransitionRegistrar(self.input, self.old, state, True)
 
     def loop(self) -> TransitionRegistrar[
         Concatenate[InputProtocol, Core, P],
         Concatenate[InputProtocol, P],
         R,
     ]:
-        return TransitionRegistrar(self.input, self.old, self.old)
+        return TransitionRegistrar(self.input, self.old, self.old, True)
 
 
 @dataclass
@@ -374,10 +256,30 @@ class TypifiedDataState(Generic[InputProtocol, Core, Data, FactoryParams]):
     builder: TypeMachineBuilder[InputProtocol, Core]
     factory: Callable[Concatenate[InputProtocol, Core, FactoryParams], Data]
 
+    @overload
     def upon(
         self, input: Callable[Concatenate[InputProtocol, P], R]
-    ) -> UponFromData[InputProtocol, Core, P, R, Data]:
-        return UponFromData(self, input)
+    ) -> UponFromData[InputProtocol, Core, P, R, Data]: ...
+    @overload
+    def upon(
+        self, input: Callable[Concatenate[InputProtocol, P], R], nodata: Literal[False]
+    ) -> UponFromData[InputProtocol, Core, P, R, Data]: ...
+    @overload
+    def upon(
+        self, input: Callable[Concatenate[InputProtocol, P], R], nodata: Literal[True]
+    ) -> UponFromNo[InputProtocol, Core, P, R]: ...
+    def upon(
+        self,
+        input: Callable[Concatenate[InputProtocol, P], R],
+        nodata: bool = False,
+    ) -> (
+        UponFromData[InputProtocol, Core, P, R, Data]
+        | UponFromNo[InputProtocol, Core, P, R]
+    ):
+        if nodata:
+            return UponFromNo(self, input)
+        else:
+            return UponFromData(self, input)
 
     def _produce_outputs(
         self,
