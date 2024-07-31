@@ -15,8 +15,7 @@ class TestProtocol(Protocol):
 
 
 class ArgTaker(Protocol):
-    def takeSomeArgs(self, arg1: int = 0, arg2: str = "") -> None:
-        pass
+    def takeSomeArgs(self, arg1: int = 0, arg2: str = "") -> None: ...
 
 
 class NoOpCore:
@@ -291,7 +290,7 @@ class TypeMachineTests(TestCase):
         def startup(methods: SomeMethods, core: NoOpCore) -> None:
             order.append("startup")
             methods.later()
-            order.append("startup done")
+            order.append("startup done")  # pragma: no cover
 
         @pep614(second.upon(SomeMethods.later).loop())
         def later(methods: SomeMethods, core: NoOpCore) -> int:
