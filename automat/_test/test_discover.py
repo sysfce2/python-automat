@@ -211,6 +211,31 @@ class FindMachinesViaWrapperTests(_WritesPythonModules):
             list(self.findMachinesViaWrapper(rootMachine)),
         )
 
+    def test_yieldsTypeMachine(self) -> None:
+        """
+        When given a L{twisted.python.modules.PythonAttribute} that refers
+        directly to a L{TypeMachine}, L{findMachinesViaWrapper} yields that
+        machine and its FQPN.
+        """
+        source = """\
+        from automat import TypeMachineBuilder
+        from typing import Protocol, Callable
+        class P(Protocol):
+            def method(self) -> None: ...
+        class C:...
+        def buildBuilder() -> Callable[[C], P]:
+            builder = TypeMachineBuilder(P, C)
+            return builder.build()
+        rootMachine = buildBuilder()
+        """
+
+        moduleDict = self.makeModuleAsDict(source, self.pathDir, "root.py")
+        rootMachine = moduleDict["root.rootMachine"]
+        self.assertIn(
+            ("root.rootMachine", rootMachine.load()),
+            list(self.findMachinesViaWrapper(rootMachine)),
+        )
+
     def test_yieldsMachineInClass(self):
         """
         When given a L{twisted.python.modules.PythonAttribute} that refers
