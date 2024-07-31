@@ -28,14 +28,14 @@ def buildTestBuilder() -> Callable[[NoOpCore], TestProtocol]:
     first = builder.state("first")
     second = builder.state("second")
 
-    first.to(second).upon(TestProtocol.change).returns(None)
-    second.to(first).upon(TestProtocol.change).returns(None)
+    first.upon(TestProtocol.change).to(second).returns(None)
+    second.upon(TestProtocol.change).to(first).returns(None)
 
-    @pep614(first.loop().upon(TestProtocol.value))
+    @pep614(first.upon(TestProtocol.value).loop())
     def firstValue(machine: TestProtocol, core: NoOpCore) -> int:
         return 3
 
-    @pep614(second.loop().upon(TestProtocol.value))
+    @pep614(second.upon(TestProtocol.value).loop())
     def secondValue(machine: TestProtocol, core: NoOpCore) -> int:
         return 4
 
@@ -91,13 +91,13 @@ class TypeMachineTests(TestCase):
         builder = TypeMachineBuilder(Counter, NoOpCore)
         initial = builder.state("initial")
         counting = builder.state("counting", lambda machine, core: Count())
-        initial.to(counting).upon(Counter.start).returns(None)
+        initial.upon(Counter.start).to(counting).returns(None)
 
-        @pep614(counting.loop().upon(Counter.increment))
+        @pep614(counting.upon(Counter.increment).loop())
         def incf(counter: Counter, core: NoOpCore, count: Count) -> None:
             count.value += 1
 
-        @pep614(counting.to(initial).upon(Counter.stop))
+        @pep614(counting.upon(Counter.stop).to(initial))
         def finish(counter: Counter, core: NoOpCore, count: Count) -> int:
             return count.value
 
@@ -114,7 +114,7 @@ class TypeMachineTests(TestCase):
     def test_incompleteTransitionDefinition(self) -> None:
         builder = TypeMachineBuilder(SimpleProtocol, NoOpCore)
         sample = builder.state("sample")
-        sample.loop().upon(SimpleProtocol.method)  # oops, no '.returns(None)'
+        sample.upon(SimpleProtocol.method).loop()  # oops, no '.returns(None)'
         with self.assertRaises(ValueError) as raised:
             builder.build()
         self.assertIn(
@@ -144,7 +144,7 @@ class TypeMachineTests(TestCase):
             d.value *= 2
             return d.value
 
-        counting.to(appending).upon(TestProtocol.change).returns(None)
+        counting.upon(TestProtocol.change).to(appending).returns(None)
 
         @pep614(appending.upon(TestProtocol.value).loop())
         def appendup(p: TestProtocol, c: NoOpCore, d: Data2) -> int:
@@ -169,14 +169,16 @@ class TypeMachineTests(TestCase):
         initial = builder.state("initial")
         data = builder.state("data", needsSomething)
         data2 = builder.state("data2", needsSomething)
-        toState = initial.to(data)
+        # toState = initial.to(data)
 
         # 'assertions' in the form of expected type errors:
-        uponInput = toState.upon(TestProtocol.change)  # type:ignore[arg-type]
-        uponInput.returns(None)
-        toState2 = data.to(data2)
-        uponInput2 = toState2.upon(TestProtocol.change)  # type:ignore[arg-type]
-        uponInput2.returns(None)
+        # (no data -> data)
+        uponNoData = initial.upon(TestProtocol.change)
+        uponNoData.to(data)           # type:ignore[arg-type]
+
+        # (data -> data)
+        uponData = data.upon(TestProtocol.change)
+        uponData.to(data2)      # type:ignore[arg-type]
 
     def test_dataFactoryNoArgs(self) -> None:
         """

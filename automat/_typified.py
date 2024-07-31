@@ -351,48 +351,10 @@ class TypifiedState(Generic[InputProtocol, Core]):
     name: str
     builder: TypeMachineBuilder[InputProtocol, Core]
 
-    def loop(self) -> NoToNo[InputProtocol, Core]:
-        """
-        An alias for C{self.to(self)}, for symmetry with
-        L{TypifiedDataState.loop}.
-        """
-        return self.to(self)
-
     def upon(
         self, input: Callable[Concatenate[InputProtocol, P], R]
     ) -> UponFromNo[InputProtocol, Core, P, R]:
         return UponFromNo(self, input)
-
-    @overload
-    def to(
-        self, state: TypifiedState[InputProtocol, Core]
-    ) -> NoToNo[InputProtocol, Core]: ...
-    @overload
-    def to(
-        self,
-        state: TypifiedDataState[InputProtocol, Core, OtherData, OtherFactoryParams],
-    ) -> NoToData[InputProtocol, Core, OtherFactoryParams]: ...
-    def to(
-        self,
-        state: (
-            TypifiedState[InputProtocol, Core]
-            | TypifiedDataState[InputProtocol, Core, Any, OtherFactoryParams]
-        ),
-    ) -> (
-        NoToNo[InputProtocol, Core]
-        | NoToData[
-            InputProtocol,
-            Core,
-            OtherFactoryParams,
-        ]
-    ):
-        """
-        Declare a state transition to a new state.
-        """
-        if isinstance(state, TypifiedState):
-            return NoToNo(self, state)
-        else:
-            return NoToData(self, state)
 
     def _produce_outputs(
         self,
@@ -412,47 +374,10 @@ class TypifiedDataState(Generic[InputProtocol, Core, Data, FactoryParams]):
     builder: TypeMachineBuilder[InputProtocol, Core]
     factory: Callable[Concatenate[InputProtocol, Core, FactoryParams], Data]
 
-    def loop(self) -> DataToSelf[InputProtocol, Core, Data]:
-        """
-        This method does what C{.to(self)} would do, if type signatures could
-        be conditional upon identity comparison.
-        """
-        return DataToSelf(self)
-
     def upon(
         self, input: Callable[Concatenate[InputProtocol, P], R]
     ) -> UponFromData[InputProtocol, Core, P, R, Data]:
         return UponFromData(self, input)
-
-    @overload
-    def to(
-        self, state: TypifiedState[InputProtocol, Core]
-    ) -> DataToNo[InputProtocol, Core, Data]: ...
-    @overload
-    def to(
-        self,
-        state: TypifiedDataState[InputProtocol, Core, OtherData, OtherFactoryParams],
-    ) -> DataToData[InputProtocol, Core, Data, OtherFactoryParams, OtherData]: ...
-    def to(
-        self,
-        state: (
-            TypifiedState[InputProtocol, Core]
-            | TypifiedDataState[InputProtocol, Core, OtherData, OtherFactoryParams]
-        ),
-    ) -> (
-        DataToNo[InputProtocol, Core, Data]
-        | DataToData[InputProtocol, Core, Data, OtherFactoryParams, OtherData]
-    ):
-        """
-        Declare a state transition to a new state.
-        """
-        if isinstance(state, TypifiedState):
-            return DataToNo(self, state)
-        else:
-            assert (
-                state is not self
-            ), "data-state self-transitions do not take factory parameters to reconstruct their 'data' parameter and thus must be registered with '.loop()' not '.to(...)' to get the right signature"
-            return DataToData(self, state)
 
     def _produce_outputs(
         self,
