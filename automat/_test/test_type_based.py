@@ -46,11 +46,11 @@ machineFactory = buildTestBuilder()
 
 def needsSomething(proto: TestProtocol, core: NoOpCore, value: str) -> int:
     "we need data to build this state"
-    return 3
+    return 3  # pragma: no cover
 
 
 def needsNothing(proto: ArgTaker, core: NoOpCore) -> str:
-    return "state-specific data"
+    return "state-specific data"  # pragma: no cover
 
 
 class SimpleProtocol(Protocol):
