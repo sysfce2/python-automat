@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Callable, List, Protocol
 from unittest import TestCase
 
-from .. import TypeMachineBuilder, pep614
+from .. import TypeMachineBuilder, pep614, NoTransition
 
 
 class TestProtocol(Protocol):
@@ -228,6 +228,17 @@ class TypeMachineTests(TestCase):
             .to(data)  # type:ignore[arg-type]
             .returns(None)
         )
+
+    def test_invalidTransition(self) -> None:
+        """
+        Invalid transitions raise a NoTransition exception.
+        """
+        builder = TypeMachineBuilder(TestProtocol, NoOpCore)
+        builder.state("initial")
+        factory = builder.build()
+        machine = factory(NoOpCore())
+        with self.assertRaises(NoTransition):
+            machine.change()
 
     def test_reentrancy(self) -> None:
         """
