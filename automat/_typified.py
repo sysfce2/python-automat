@@ -53,6 +53,15 @@ def pep614(t: R) -> R:
 class TransitionRegistrar(Generic[P, P1, R]):
     """
     This is a record of a transition that need finalizing.
+
+    Type parameter P: the precise signature of the decorated implementation
+    callable.
+
+    Type parameter P1: the precise signature of the input method from the
+    outward-facing state-machine protocol.
+
+    Type parameter R: the return type of both the protocol method and the input
+    method.
     """
 
     _signature: Callable[P1, R]
@@ -237,6 +246,106 @@ class DataToSelfNoData(Generic[InputProtocol, Core, Data]):
         return TransitionRegistrar(input, self.state, self.state, True)
 
 
+@dataclass
+class UponFromNo(Generic[InputProtocol, Core, P, R]):
+    """
+    Type parameter P: the signature of the input method.
+    """
+
+    old: TypifiedState[InputProtocol, Core]
+    input: Callable[Concatenate[InputProtocol, P], R]
+
+    @overload
+    def to(
+        self, state: TypifiedState[InputProtocol, Core]
+    ) -> TransitionRegistrar[Concatenate[InputProtocol, Core, P], P, R]: ...
+    @overload
+    def to(
+        self,
+        state: TypifiedDataState[InputProtocol, Core, OtherData, P],
+    ) -> TransitionRegistrar[
+        Concatenate[InputProtocol, Core, P],
+        Concatenate[InputProtocol, P],
+        R,
+    ]: ...
+    def to(
+        self,
+        state: (
+            TypifiedState[InputProtocol, Core]
+            | TypifiedDataState[InputProtocol, Core, Any, P]
+        ),
+    ) -> (
+        TransitionRegistrar[Concatenate[InputProtocol, Core, P], P, R]
+        | TransitionRegistrar[
+            Concatenate[InputProtocol, Core, P],
+            Concatenate[InputProtocol, P],
+            R,
+        ]
+    ):
+        """
+        Declare a state transition to a new state.
+        """
+        return TransitionRegistrar(self.input, self.old, state)
+
+    def loop(self) -> TransitionRegistrar[
+        Concatenate[InputProtocol, Core, P],
+        Concatenate[InputProtocol, P],
+        R,
+    ]:
+        return TransitionRegistrar(self.input, self.old, self.old)
+
+
+@dataclass
+class UponFromData(Generic[InputProtocol, Core, P, R, Data]):
+    """
+    Type parameter P: the signature of the input method.
+    """
+
+    old: TypifiedDataState[InputProtocol, Core, Data, ...]
+    input: Callable[Concatenate[InputProtocol, P], R]
+
+    @overload
+    def to(
+        self, state: TypifiedState[InputProtocol, Core]
+    ) -> TransitionRegistrar[
+        Concatenate[InputProtocol, Core, Data, P], Concatenate[InputProtocol, P], R
+    ]: ...
+    @overload
+    def to(
+        self,
+        state: TypifiedDataState[InputProtocol, Core, OtherData, P],
+    ) -> TransitionRegistrar[
+        Concatenate[InputProtocol, Core, Data, P],
+        Concatenate[InputProtocol, P],
+        R,
+    ]: ...
+    def to(
+        self,
+        state: (
+            TypifiedState[InputProtocol, Core]
+            | TypifiedDataState[InputProtocol, Core, Any, P]
+        ),
+    ) -> (
+        TransitionRegistrar[Concatenate[InputProtocol, Core, P], P, R]
+        | TransitionRegistrar[
+            Concatenate[InputProtocol, Core, Data, P],
+            Concatenate[InputProtocol, P],
+            R,
+        ]
+    ):
+        """
+        Declare a state transition to a new state.
+        """
+        return TransitionRegistrar(self.input, self.old, state)
+
+    def loop(self) -> TransitionRegistrar[
+        Concatenate[InputProtocol, Core, Data, P],
+        Concatenate[InputProtocol, P],
+        R,
+    ]:
+        return TransitionRegistrar(self.input, self.old, self.old)
+
+
 @dataclass(frozen=True)
 class TypifiedState(Generic[InputProtocol, Core]):
     name: str
@@ -248,6 +357,11 @@ class TypifiedState(Generic[InputProtocol, Core]):
         L{TypifiedDataState.loop}.
         """
         return self.to(self)
+
+    def upon(
+        self, input: Callable[Concatenate[InputProtocol, P], R]
+    ) -> UponFromNo[InputProtocol, Core, P, R]:
+        return UponFromNo(self, input)
 
     @overload
     def to(
@@ -304,6 +418,11 @@ class TypifiedDataState(Generic[InputProtocol, Core, Data, FactoryParams]):
         be conditional upon identity comparison.
         """
         return DataToSelf(self)
+
+    def upon(
+        self, input: Callable[Concatenate[InputProtocol, P], R]
+    ) -> UponFromData[InputProtocol, Core, P, R, Data]:
+        return UponFromData(self, input)
 
     @overload
     def to(

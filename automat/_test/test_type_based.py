@@ -15,7 +15,7 @@ class TestProtocol(Protocol):
 
 
 class ArgTaker(Protocol):
-    def takeSomeArgs(self, arg1: int=0, arg2: str="") -> None:
+    def takeSomeArgs(self, arg1: int = 0, arg2: str = "") -> None:
         pass
 
 
@@ -137,16 +137,16 @@ class TypeMachineTests(TestCase):
         counting = builder.state("counting", lambda proto, core: Data1(1))
         appending = builder.state("appending", lambda proto, core: Data2([]))
 
-        initial.to(counting).upon(TestProtocol.change).returns(None)
+        initial.upon(TestProtocol.change).to(counting).returns(None)
 
-        @pep614(counting.loop().upon(TestProtocol.value))
+        @pep614(counting.upon(TestProtocol.value).loop())
         def countup(p: TestProtocol, c: NoOpCore, d: Data1) -> int:
             d.value *= 2
             return d.value
 
         counting.to(appending).upon(TestProtocol.change).returns(None)
 
-        @pep614(appending.loop().upon(TestProtocol.value))
+        @pep614(appending.upon(TestProtocol.value).loop())
         def appendup(p: TestProtocol, c: NoOpCore, d: Data2) -> int:
             d.stuff.extend("abc")
             return len(d.stuff)
@@ -186,6 +186,8 @@ class TypeMachineTests(TestCase):
         builder = TypeMachineBuilder(ArgTaker, NoOpCore)
         initial = builder.state("initial")
         data = builder.state("data", needsNothing)
-        toState = initial.to(data)
-        uponInput = toState.upon(ArgTaker.takeSomeArgs)  # type:ignore[arg-type]
-        uponInput.returns(None)
+        (
+            initial.upon(ArgTaker.takeSomeArgs)
+            .to(data)  # type:ignore[arg-type]
+            .returns(None)
+        )
