@@ -186,26 +186,6 @@ class FindMachinesViaWrapperTests(_WritesPythonModules):
     L{twisted.python.modules.PythonAttribute}.
     """
 
-    TEST_MODULE_SOURCE = """
-    from automat import MethodicalMachine
-
-
-    class PythonClass(object):
-        _classMachine = MethodicalMachine()
-
-        class NestedClass(object):
-            _nestedClassMachine = MethodicalMachine()
-
-        ignoredAttribute = "I am ignored."
-
-        def ignoredMethod(self):
-            "I am also ignored."
-
-    rootLevelMachine = MethodicalMachine()
-    ignoredPythonObject = PythonClass()
-    anotherIgnoredPythonObject = "I am ignored."
-    """
-
     def setUp(self):
         super(FindMachinesViaWrapperTests, self).setUp()
         from .._discover import findMachinesViaWrapper
