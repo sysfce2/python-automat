@@ -123,22 +123,22 @@ def _coffee_machine() -> TypeMachineBuilder[_BrewerInternals, BrewCore]:
         ):
             brewer._ready(core.beans, core.water, core.carafe)
 
-    @not_ready.loop().upon(Brewer.put_in_beans)
+    @not_ready.upon(Brewer.put_in_beans).loop()
     def put_beans(brewer: _BrewerInternals, core: BrewCore, beans: Beans) -> None:
         core.beans = beans
         ready_check(brewer, core)
 
-    @not_ready.loop().upon(Brewer.put_in_water)
+    @not_ready.upon(Brewer.put_in_water).loop()
     def put_water(brewer: _BrewerInternals, core: BrewCore, water: Water) -> None:
         core.water = water
         ready_check(brewer, core)
 
-    @not_ready.loop().upon(Brewer.put_in_carafe)
+    @not_ready.upon(Brewer.put_in_carafe).loop()
     def put_carafe(brewer: _BrewerInternals, core: BrewCore, carafe: Carafe) -> None:
         core.carafe = carafe
         ready_check(brewer, core)
 
-    @not_ready.to(ready).upon(_BrewerInternals._ready)
+    @not_ready.upon(_BrewerInternals._ready).to(ready)
     def get_ready(
         brewer: _BrewerInternals,
         core: BrewCore,
@@ -148,13 +148,13 @@ def _coffee_machine() -> TypeMachineBuilder[_BrewerInternals, BrewCore]:
     ) -> None:
         print("ready output")
 
-    @ready.to(brewing).upon(Brewer.brew_button)
+    @ready.upon(Brewer.brew_button).to(brewing)
     def brew(brewer: _BrewerInternals, core: BrewCore, ready: Ready) -> None:
         core.brew_light.on = True
         print("BREW CALLED")
         core.brewing = ready.brew()
 
-    @brewing.to(not_ready).upon(_BrewerInternals.wait_a_while)
+    @brewing.upon(_BrewerInternals.wait_a_while).to(not_ready)
     def brewed(brewer: _BrewerInternals, core: BrewCore, mixture: Mixture) -> Mixture:
         core.brew_light.on = False
         return mixture

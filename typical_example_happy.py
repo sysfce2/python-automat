@@ -91,30 +91,30 @@ def buildMachine() -> Callable[[ConnectionState], ConnectionCoordinator]:
     AtCapacity = builder.state("AtCapacity")
     CleaningUp = builder.state("CleaningUp")
 
-    Requested.to(AtCapacity).upon(ConnectionCoordinator.atCapacity).returns(None)
-    Requested.loop().upon(ConnectionCoordinator.headroom).returns(None)
-    CleaningUp.loop().upon(ConnectionCoordinator.headroom).returns(None)
-    CleaningUp.loop().upon(ConnectionCoordinator.cleanup).returns(None)
+    Requested.upon(ConnectionCoordinator.atCapacity).to(AtCapacity).returns(None)
+    Requested.upon(ConnectionCoordinator.headroom).loop().returns(None)
+    CleaningUp.upon(ConnectionCoordinator.headroom).loop().returns(None)
+    CleaningUp.upon(ConnectionCoordinator.cleanup).loop().returns(None)
 
-    @Initial.to(Requested).upon(ConnectionCoordinator.start)
+    @Initial.upon(ConnectionCoordinator.start).to(Requested)
     def startup(coord: ConnectionCoordinator, core: ConnectionState) -> None:
         core.getter.startGettingRequests(coord.requestReceived)
 
-    @AtCapacity.loop().upon(ConnectionCoordinator.requestReceived)
+    @AtCapacity.upon(ConnectionCoordinator.requestReceived).loop()
     def requestReceived(
         coord: ConnectionCoordinator, core: ConnectionState, r: Request
     ) -> None:
         print("buffering request", r)
         core.queue.append(r)
 
-    @AtCapacity.to(Requested).upon(ConnectionCoordinator.headroom)
+    @AtCapacity.upon(ConnectionCoordinator.headroom).to(Requested)
     def headroom(coord: ConnectionCoordinator, core: ConnectionState) -> None:
         "nothing to do, just transition to Requested state"
         unhandledRequest = core.queue.pop()
         print("dequeueing", unhandledRequest)
         coord.requestReceived(unhandledRequest)
 
-    @Requested.loop().upon(ConnectionCoordinator.requestReceived)
+    @Requested.upon(ConnectionCoordinator.requestReceived).loop()
     def requestedRequest(
         coord: ConnectionCoordinator, core: ConnectionState, r: Request
     ) -> None:
@@ -124,10 +124,10 @@ def buildMachine() -> Callable[[ConnectionState], ConnectionCoordinator]:
             coord.atCapacity()
 
 
-    @Initial.loop().upon(ConnectionCoordinator.taskComplete)
-    @Requested.loop().upon(ConnectionCoordinator.taskComplete)
-    @AtCapacity.loop().upon(ConnectionCoordinator.taskComplete)
-    @CleaningUp.loop().upon(ConnectionCoordinator.taskComplete)
+    @Initial.upon(ConnectionCoordinator.taskComplete).loop()
+    @Requested.upon(ConnectionCoordinator.taskComplete).loop()
+    @AtCapacity.upon(ConnectionCoordinator.taskComplete).loop()
+    @CleaningUp.upon(ConnectionCoordinator.taskComplete).loop()
     def taskComplete(
         c: ConnectionCoordinator, s: ConnectionState, task: Task, success: bool
     ) -> None:
@@ -137,8 +137,8 @@ def buildMachine() -> Callable[[ConnectionState], ConnectionCoordinator]:
         else:
             c.headroom()
 
-    @Requested.to(CleaningUp).upon(ConnectionCoordinator.cleanup)
-    @AtCapacity.to(CleaningUp).upon(ConnectionCoordinator.cleanup)
+    @Requested.upon(ConnectionCoordinator.cleanup).to(CleaningUp)
+    @AtCapacity.upon(ConnectionCoordinator.cleanup).to(CleaningUp)
     def cleanup(coord: ConnectionCoordinator, core: ConnectionState):
         # We *don't* want to recurse in here; stopping tasks will cause
         # taskComplete!
