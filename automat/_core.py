@@ -6,9 +6,10 @@ A core state-machine abstraction.
 Perhaps something that could be replaced with or integrated into machinist.
 """
 from __future__ import annotations
+
 import sys
 from itertools import chain
-from typing import Generic, Sequence, TypeVar, Callable
+from typing import Callable, Generic, Sequence, TypeVar
 
 if sys.version_info >= (3, 10):
     from typing import TypeAlias
@@ -55,7 +56,7 @@ class Automaton(Generic[State, Input, Output]):
         assert initial is not None
         self._initialState: State = initial
         self._transitions: set[tuple[State, Input, State, Sequence[Output]]] = set()
-        self._unhandledTransition = None
+        self._unhandledTransition: Optional[tuple[State, Sequence[Output]]] = None
 
     @property
     def initialState(self) -> State:
@@ -101,8 +102,14 @@ class Automaton(Generic[State, Input, Output]):
                 )
         self._transitions.add((inState, inputSymbol, outState, tuple(outputSymbols)))
 
-    def unhandledTransition(self, outState, outputSymbols):
-        self._unhandledTransition = (outState, outputSymbols)
+    def unhandledTransition(
+        self, outState: State, outputSymbols: Sequence[Output]
+    ) -> None:
+        """
+        All unhandled transitions will be handled by transitioning to the given
+        error state and error-handling output symbols.
+        """
+        self._unhandledTransition = (outState, tuple(outputSymbols))
 
     def allTransitions(self) -> frozenset[tuple[State, Input, State, Sequence[Output]]]:
         """

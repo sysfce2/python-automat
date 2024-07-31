@@ -1,6 +1,6 @@
-from .._core import Automaton, NoTransition
-
 from unittest import TestCase
+
+from .._core import Automaton, NoTransition, Transitioner
 
 
 class CoreTests(TestCase):
@@ -25,6 +25,19 @@ class CoreTests(TestCase):
 
         self.assertIn(state, str(noTransitionException))
         self.assertIn(symbol, str(noTransitionException))
+
+    def test_unhandledTransition(self) -> None:
+        """
+        Automaton.unhandledTransition sets the outputs and end-state to be used
+        for all unhandled transitions.
+        """
+        a: Automaton[str, str, str] = Automaton("start")
+        a.addTransition("oops-state", "check", "start", tuple(["checked"]))
+        a.unhandledTransition("oops-state", ["oops-out"])
+        t = Transitioner(a, "start")
+        self.assertEqual(t.transition("check"), (tuple(["oops-out"]),None))
+        self.assertEqual(t.transition("check"), (["checked"],None))
+        self.assertEqual(t.transition("check"), (tuple(["oops-out"]),None))
 
     def test_noOutputForInput(self):
         """
