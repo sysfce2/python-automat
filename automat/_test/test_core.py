@@ -35,9 +35,9 @@ class CoreTests(TestCase):
         a.addTransition("oops-state", "check", "start", tuple(["checked"]))
         a.unhandledTransition("oops-state", ["oops-out"])
         t = Transitioner(a, "start")
-        self.assertEqual(t.transition("check"), (tuple(["oops-out"]),None))
-        self.assertEqual(t.transition("check"), (["checked"],None))
-        self.assertEqual(t.transition("check"), (tuple(["oops-out"]),None))
+        self.assertEqual(t.transition("check"), (tuple(["oops-out"]), None))
+        self.assertEqual(t.transition("check"), (["checked"], None))
+        self.assertEqual(t.transition("check"), (tuple(["oops-out"]), None))
 
     def test_noOutputForInput(self):
         """
