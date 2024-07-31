@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Callable, Protocol
+from typing import Callable, List, Protocol
 from unittest import TestCase
 
 from .. import TypeMachineBuilder, pep614
@@ -167,7 +167,7 @@ class TypeMachineTests(TestCase):
 
         @dataclass
         class Data2:
-            stuff: list[str]
+            stuff: List[str]
 
         initial = builder.state("initial")
         counting = builder.state("counting", lambda proto, core: Data1(1))
