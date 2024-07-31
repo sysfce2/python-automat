@@ -270,6 +270,7 @@ class SpotChecks(TestCase):
         self.assertIn("end", gvout)
         self.assertIn("go", gvout)
         self.assertIn("out", gvout)
+
     def test_containsTypeMachineFeatures(self):
         """
         The output of L{graphviz} should contain the names of the states,
