@@ -25,15 +25,15 @@ def buildMachine() -> Callable[[Lock], Turnstile]:
     locked = builder.state("Locked")
     unlocked = builder.state("Unlocked")
 
-    @locked.to(unlocked).upon(Turnstile.fare_paid)
+    @locked.upon(Turnstile.fare_paid).to(unlocked)
     def pay(self: Turnstile, lock: Lock, coin: int) -> None:
         lock.disengage()
 
-    @locked.loop().upon(Turnstile.arm_turned)
+    @locked.upon(Turnstile.arm_turned).loop()
     def block(self: Turnstile, lock: Lock) -> None:
         print("**Clunk!**  The turnstile doesn't move.")
 
-    @unlocked.to(locked).upon(Turnstile.arm_turned)
+    @unlocked.upon(Turnstile.arm_turned).to(locked)
     def turn(self: Turnstile, lock: Lock) -> None:
         lock.engage()
 
