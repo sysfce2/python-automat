@@ -1,7 +1,6 @@
 ===========
 Quick Start
 ===========
-.. people like things that are quick and easy
 
 
 What makes Automat different?
@@ -10,9 +9,10 @@ There are `dozens of libraries on PyPI implementing state machines
 <https://pypi.org/search/?q=finite+state+machine>`_.
 So it behooves me to say why yet another one would be a good idea.
 
-Automat is designed around this principle:
+Automat is designed around the following principle:
 while organizing your code around state machines is a good idea,
 your callers don't, and shouldn't have to, care that you've done so.
+
 In Python, the "input" to a stateful system is a method call;
 the "output" may be a method call, if you need to invoke a side effect,
 or a return value, if you are just performing a computation in memory.
@@ -21,136 +21,61 @@ provide that object to a generic "input" method, and then receive results,
 sometimes in terms of that library's interfaces and sometimes in terms of
 classes you define yourself.
 
-For example, a snippet of the coffee-machine example above might be implemented
-as follows in naive Python:
+Therefore, from the outside, an Automat state machine looks like a Plain Old
+Python Object (POPO).  It has methods, and the methods have type annotations,
+and you can call them and get their documented return values.
 
+A Case Study: Garage Door Controller
+====================================
 
-.. code-block:: python
+Let's consider :ref:`the garage door example from the introduction<Garage-Example>`.
 
-    class CoffeeMachine(object):
-        def brew_button(self):
-            if self.has_water and self.has_beans and not self.is_lid_open:
-                self.heat_the_heating_element()
-                # ...
+As previously mentioned, Automat takes great care to present a state machine as
+a collection of regular methods.  So we define what those methods *are* with a
+:py:class:`typing.Protocol` that describes them.
 
+.. literalinclude:: examples/garage_door.py
+   :pyobject: GarageController
 
-With Automat, you'd create a class with a :py:class:`automat.MethodicalMachine` attribute:
+This protocol tells us that only 3 things can happen to our controller from the
+outside world (its inputs): the user can push the button, the "door is all the way up"
+sensor can emit a signal, or the "door is all the way down" sensor can emit a
+signal.  So those are our inputs.
 
+However, our state machine also needs to be able to *affect* things in the
+world (its outputs). As we are writing a program in Python, these come in the
+form of a Python object that can be shared between all the states that
+implement our controller, and for this purpose we define a simple shared-data class:
 
-.. code-block:: python
+.. literalinclude:: examples/garage_door.py
+   :pyobject: DoorDevices
 
-    from automat import MethodicalMachine
+Here we have a reference to a ``Motor`` that can open and close the door, and
+an ``Alarm`` that can beep to alert people that the door is closing.
 
-    class CoffeeBrewer(object):
-        _machine = MethodicalMachine()
+Next we need to combine those together, using a :py:class:`automat.TypeMachineBuilder`.
 
+.. literalinclude:: examples/garage_door.py
+   :start-after: start building
+   :end-before: build states
 
-and then you would break the above logic into two pieces - the `brew_button`
-*input*, declared like so:
+Next we have to define our states.  Let's start with four simple ones:
 
+1. closed - the door is closed and idle
+2. opening - the door is actively opening
+3. opened - the door is open and idle
+4. closing - the door is actively closing
 
-.. code-block:: python
+.. literalinclude:: examples/garage_door.py
+   :start-after: build states
+   :end-before: end states
 
-    class CoffeeBrewer(object):
-        _machine = MethodicalMachine()
+To build the state machine, we define a series of transitions, using the method
+``.upon()``:
 
-        @_machine.input()
-        def brew_button(self):
-            "The user pressed the 'brew' button."
-
-
-It wouldn't do any good to declare a method *body* on this, however,
-because input methods don't actually execute their bodies when called;
-doing actual work is the *output*'s job:
-
-
-.. code-block:: python
-
-    class CoffeeBrewer(object):
-        _machine = MethodicalMachine()
-
-        # ...
-
-        @_machine.output()
-        def _heat_the_heating_element(self):
-            "Heat up the heating element, which should cause coffee to happen."
-            self._heating_element.turn_on()
-
-
-As well as a couple of *states* - and for simplicity's sake let's say that the
-only two states are `have_beans` and `dont_have_beans`:
-
-
-.. code-block:: python
-
-    class CoffeeBrewer(object):
-        _machine = MethodicalMachine()
-
-        # ...
-
-        @_machine.state()
-        def have_beans(self):
-            "In this state, you have some beans."
-
-        @_machine.state(initial=True)
-        def dont_have_beans(self):
-            "In this state, you don't have any beans."
-
-
-`dont_have_beans` is the `initial` state
-because `CoffeeBrewer` starts without beans in it.
-
-(And another input to put some beans in:)
-
-.. code-block:: python
-
-    class CoffeeBrewer(object):
-        _machine = MethodicalMachine()
-
-        # ...
-
-        @_machine.input()
-        def put_in_beans(self):
-            "The user put in some beans."
-
-
-Finally, you hook everything together with the :py:meth:`.upon` method
-of the functions decorated with `_machine.state`:
-
-.. code-block:: python
-
-    class CoffeeBrewer(object):
-        _machine = MethodicalMachine()
-
-        # ...
-
-        # When we don't have beans, upon putting in beans, we will then have beans
-        # (and produce no output)
-        dont_have_beans.upon(put_in_beans, enter=have_beans, outputs=[])
-
-        # When we have beans, upon pressing the brew button, we will then not have
-        # beans any more (as they have been entered into the brewing chamber) and
-        # our output will be heating the heating element.
-        have_beans.upon(brew_button, enter=dont_have_beans,
-                        outputs=[_heat_the_heating_element])
-
-
-To *users* of this coffee machine class though, it still looks like a POPO
-(Plain Old Python Object):
-
-
->>> coffee_machine = CoffeeMachine()
->>> coffee_machine.put_in_beans()
->>> coffee_machine.brew_button()
-
-
-All of the *inputs* are provided by calling them like methods,
-all of the *outputs* are automatically invoked when they are produced
-according to the outputs specified to :py:meth:`automat.MethodicalState.upon`
-and all of the states are simply opaque tokens -
-although the fact that they're defined as methods like inputs and outputs
-allows you to put docstrings on them easily to document them.
-
+.. literalinclude:: examples/garage_door.py
+   :start-after: build methods
+   :end-before: end methods
 
 How do I get the current state of a state machine?
 ==================================================
@@ -173,11 +98,9 @@ in.  So if you are tempted to write some code like this:
 
 Instead, just make your calling code do this:
 
-
 .. code-block:: python
 
     connection_state_machine.send_message()
-
 
 and then change your state machine to look like this:
 
