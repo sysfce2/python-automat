@@ -86,7 +86,7 @@ def _coffee_machine() -> TypeMachineBuilder[_BrewerInternals, BrewCore]:
     builder = TypeMachineBuilder(_BrewerInternals, BrewCore)
     # reveal_type(builder)
 
-    not_ready = builder.state("HaveBeans")
+    not_ready = builder.state("not_ready")
 
     def ready_factory(
         brewer: _BrewerInternals,
@@ -111,8 +111,8 @@ def _coffee_machine() -> TypeMachineBuilder[_BrewerInternals, BrewCore]:
 
         return Mixture(core.beans, core.water)
 
-    ready = builder.state("Ready", ready_factory)
-    brewing = builder.state("Brewing", mixture_factory)
+    ready = builder.state("ready", ready_factory)
+    brewing = builder.state("brewing", mixture_factory)
 
     def ready_check(brewer: _BrewerInternals, core: BrewCore) -> None:
         if (
