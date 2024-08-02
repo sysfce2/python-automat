@@ -21,12 +21,12 @@ but still wishes to present a consistent interface to its callers.
 For example, let's say we are writing the software for a garage door
 controller.  The garage door is composed of 4 components:
 
-1. A motor which can be run forward or in reverse, to raise or lower the
-   door respectively.
+1. A motor which can be run up or down, to raise or lower the door
+   respectively.
 2. A sensor that activates when the door is fully open.
 3. A sensor that activates when the door is fully closed.
-4. A button that tells the door to open or close
-.
+4. A button that tells the door to open or close.
+
 It's very important that the garage door does not get confused about its state,
 because we could burn out the motor if we attempt to close an already-closed
 door or open an already-open door.
@@ -38,7 +38,7 @@ motor_running_direction, and so on.
 However, you have to keep all these attributes consistent.  As the software
 becomes more complex - perhaps you want to add a safety sensor that prevents
 the door from closing when someone is standing under it, for example - they all
-need to be updated.
+potentially need to be updated.
 
 Rather than adding tedious 'if' checks to every single method to make sure that
 each of these flags are exactly what you expect, you can use a state machine to

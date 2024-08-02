@@ -77,62 +77,15 @@ To build the state machine, we define a series of transitions, using the method
    :start-after: build methods
    :end-before: end methods
 
-How do I get the current state of a state machine?
-==================================================
+Building and using the state machine
+------------------------------------
 
-Don't do that.
+TKTKTK
 
-One major reason for having a state machine is that you want the callers of the
-state machine to just provide the appropriate input to the machine at the
-appropriate time, and *not have to check themselves* what state the machine is
-in.  So if you are tempted to write some code like this:
+- cover ``.build()``
+- instantiating the state machine
+- opening and closing the garage door
 
-
-.. code-block:: python
-
-    if connection_state_machine.state == "CONNECTED":
-        connection_state_machine.send_message()
-    else:
-        print("not connected")
-
-
-Instead, just make your calling code do this:
-
-.. code-block:: python
-
-    connection_state_machine.send_message()
-
-and then change your state machine to look like this:
-
-
-.. code-block:: python
-
-    class CoffeeBrewer(object):
-        _machine = MethodicalMachine()
-
-        # ...
-
-        @_machine.state()
-        def connected(self):
-            "connected"
-        @_machine.state()
-        def not_connected(self):
-            "not connected"
-        @_machine.input()
-        def send_message(self):
-            "send a message"
-        @_machine.output()
-        def _actually_send_message(self):
-            self._transport.send(b"message")
-        @_machine.output()
-        def _report_sending_failure(self):
-            print("not connected")
-        connected.upon(send_message, enter=connected, [_actually_send_message])
-        not_connected.upon(send_message, enter=not_connected, [_report_sending_failure])
-
-
-so that the responsibility for knowing which state the state machine is in
-remains within the state machine itself.
 
 Input for Inputs and Output for Outputs
 =======================================
@@ -291,8 +244,101 @@ And now, we'll get just the return value we want:
 'A cup of coffee made with real good beans.'
 
 
+State-specific Data
+-------------------
+
+TKTKTK
+
+- possible garage-door example? "stuck" state for when button is pressed when
+  door is opening or closing. same behavior in either case (pause, close if
+  button not pressed after timeout) but the direction to go in and the delayed
+  call to cancel could both be stored in a Stuck SSD.  It's a bit of a reach?
+
+OR
+
+- "automat" (vending machine) example: counting up coins to buy an item;
+  state-specific data created when first coin inserted, balance tracked on SSD
+  object, change + food dispensed and return to idle state.
+
+Reentrancy Limitations
+----------------------
+
+TKTKTK
+
+this one might need to be a little fake as you tend to hit these with complex
+asynchronous/semi-synchronous APIs in real life
+
+
+How do I get the current state of a state machine?
+==================================================
+
+Don't do that.
+
+One major reason for having a state machine is that you want the callers of the
+state machine to just provide the appropriate input to the machine at the
+appropriate time, and *not have to check themselves* what state the machine is
+in.  So if you are tempted to write some code like this:
+
+
+.. code-block:: python
+
+    if connection_state_machine.state == "CONNECTED":
+        connection_state_machine.send_message()
+    else:
+        print("not connected")
+
+
+Instead, just make your calling code do this:
+
+.. code-block:: python
+
+    connection_state_machine.send_message()
+
+and then change your state machine to look like this:
+
+
+.. code-block:: python
+
+    class Connector(Protocol):
+        def send_message(self) -> None:
+            "send a message"
+    class Core:
+        _transport: Transport
+
+    builder = TypeMachine(Connector, Core)
+    connected = builder.state("connector")
+    not_connected = builder.state("not_connected")
+    @connected.upon(Connector.send_message).loop()
+    def _actually_send_message(connector: Connector, core: Core) -> None:
+        core._transport.send(b"message")
+    @not_connected.upon(Connector.send_message).loop()
+    def _report_sending_failure(connector: Connector, core: Core):
+        print("not connected")
+    machine = builder.build()
+
+
+so that the responsibility for knowing which state the state machine is in
+remains within the state machine itself.
+
+
 If I can't get the state of the state machine, how can I save it to (a database, an API response, a file on disk...)
 ====================================================================================================================
+
+TKTKTK
+
+- no need for ``serialized=`` because we can use the ``str`` values passed to
+  ``TypeMachineBuilder.state``, those have to be serializable
+
+- we can just implement serialization as a regular input, the only thing that
+  we are missing is the ability to jump to a specific state using the built
+  constructor.  so that constructor can optionally take a state argument, and
+  be ``@overload``-ed such that a ``TypifiedDataState`` requires a parameter of
+  the ``Data`` typevar type, whereas ``TypifiedState`` does not.  Then we can
+  just instantiate the transitioner with the appropriate state variable.
+
+
+legacy version follows:
+
 There are APIs for serializing the state machine.
 
 First, you have to decide on a persistent representation of each state,
