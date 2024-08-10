@@ -10,6 +10,7 @@ from typing import (
     Generic,
     Iterable,
     Literal,
+    Protocol,
     TypeVar,
     overload,
 )
@@ -83,7 +84,7 @@ class TransitionRegistrar(Generic[P, P1, R]):
     def __post_init__(self) -> None:
         self._old.builder._registrars.append(self)
 
-    def __call__(self, /, impl: Callable[P, R]) -> Callable[P, R]:
+    def __call__(self, impl: Callable[P, R]) -> Callable[P, R]:
         """
         Finalize it with C{__call__} to indicate that there is an
         implementation to the transition, which can be treated as an output.
@@ -246,8 +247,8 @@ class TypifiedState(Generic[InputProtocol, Core]):
             | TypifiedState[InputProtocol, Core]
         ),
         nodata: bool = False,
-    ) -> Iterable[Callable[..., object]]:
-        yield create_method_output(impl, isinstance(old, TypifiedDataState))
+    ) -> Iterable[SomeOutput]:
+        yield MethodOutput(impl, isinstance(old, TypifiedDataState))
 
 
 @dataclass(frozen=True)
@@ -289,12 +290,10 @@ class TypifiedDataState(Generic[InputProtocol, Core, Data, FactoryParams]):
             | TypifiedState[InputProtocol, Core]
         ),
         nodata: bool,
-    ) -> Iterable[Callable[..., object]]:
+    ) -> Iterable[SomeOutput]:
         if self is not old:
-            yield create_data_output(self.factory)
-        yield create_method_output(
-            impl, isinstance(old, TypifiedDataState) and not nodata
-        )
+            yield DataOutput(self.factory)
+        yield MethodOutput(impl, isinstance(old, TypifiedDataState) and not nodata)
 
 
 AnyState: TypeAlias = "TypifiedState[Any, Any] | TypifiedDataState[Any, Any, Any, Any]"
@@ -305,11 +304,28 @@ class TypifiedInput:
     name: str
 
 
+class SomeOutput(Protocol):
+    """
+    A state machine output.
+    """
+
+    @property
+    def name(self) -> str:
+        "read-only name property"
+
+    def __call__(*args: Any, **kwargs: Any) -> Any: ...
+
+    def __hash__(self) -> int:
+        "must be hashable"
+
+
 @dataclass
 class TypifiedBase(Generic[Core]):
     __automat_core__: Core
     __automat_transitioner__: Transitioner[
-        TypifiedState | TypifiedDataState, str, Callable[..., object]
+        TypifiedState | TypifiedDataState,
+        str,
+        SomeOutput,
     ]
     __automat_data__: object | None = None
     __automat_initializing_data__: bool = False
@@ -333,7 +349,7 @@ def implementMethod(
     is_procedure = return_annotation is None
 
     def implementation(
-        self: TypifiedBase[Core], /, *args: object, **kwargs: object
+        self: TypifiedBase[Core], *args: object, **kwargs: object
     ) -> object:
         transitioner = self.__automat_transitioner__
         data_at_start = self.__automat_data__
@@ -376,9 +392,8 @@ def implementMethod(
     return implementation
 
 
-def create_method_output(
-    method: Callable[..., Any], requires_data: bool
-) -> Callable[..., object]:
+@dataclass(frozen=True)
+class MethodOutput(Generic[Core]):
     """
     This is the thing that goes into the automaton's outputs list, and thus
     (per the implementation of L{implementMethod}) takes the 'self' of the
@@ -387,21 +402,28 @@ def create_method_output(
     initially.
     """
 
+    method: Callable[..., Any]
+    requires_data: bool
+
+    @property
+    def name(self) -> str:
+        return f"{self.method.__name__}"
+
     # sig = _liveSignature(method)
     # if requires_data:
     #     # 0: self, 1: self.__automat_core__, 2: self.__automat_data__
     #     param = list(sig.parameters.values())[2]
     #     ann = param.annotation
 
-    def theimpl(
+    def __call__(
+        realself,
         self: TypifiedBase[Core],
-        /,
-        data_at_start: object,
+        data_at_start: Data,
         *args: object,
         **kwargs: object,
     ) -> object:
         extra_args = [self, self.__automat_core__]
-        if requires_data:
+        if realself.requires_data:
             # if self.__automat_initializing_data__:
             #     raise RuntimeError(
             #         f"data factories cannot invoke their state machines reentrantly {}"
@@ -414,19 +436,23 @@ def create_method_output(
         # set __automat_data__ and the data argument to the reentrant method
         # will be wrong.  we *need* to split out the construction / state-enter
         # hook, because it needs to run separately.
-        return method(*extra_args, *args, **kwargs)
-
-    theimpl.__qualname__ = theimpl.__name__ = f"<transition output for {method}>"
-
-    return theimpl
+        return realself.method(*extra_args, *args, **kwargs)
 
 
-def create_data_output(data_factory: Callable[..., Data]) -> Callable[..., Data]:
+@dataclass(frozen=True)
+class DataOutput(Generic[Data]):
     """
     Construct an output for the given data objects.
     """
 
-    def dataimpl(
+    data_factory: Callable[..., Data]
+
+    @property
+    def name(self) -> str:
+        return f"data:{self.data_factory.__name__}"
+
+    def __call__(
+        realself,
         self: TypifiedBase[Core],
         data_at_start: object,
         *args: object,
@@ -437,15 +463,13 @@ def create_data_output(data_factory: Callable[..., Data]) -> Callable[..., Data]
         ), "can't initialize while initializing"
         self.__automat_initializing_data__ = True
         try:
-            new_data = data_factory(self, self.__automat_core__, *args, **kwargs)
+            new_data = realself.data_factory(
+                self, self.__automat_core__, *args, **kwargs
+            )
             self.__automat_data__ = new_data
             return new_data
         finally:
             self.__automat_initializing_data__ = False
-
-    dataimpl.__qualname__ = dataimpl.__name__ = f"<data factory for {data_factory}>"
-
-    return dataimpl
 
 
 @dataclass(frozen=True)
@@ -455,7 +479,7 @@ class TypifiedMachine(Generic[InputProtocol, Core]):
         TypifiedState[InputProtocol, Core]
         | TypifiedDataState[InputProtocol, Core, Any, ...],
         str,
-        Callable[..., object],
+        SomeOutput,
     ]
 
     def __call__(self, core: Core) -> InputProtocol:
@@ -475,7 +499,7 @@ class TypifiedMachine(Generic[InputProtocol, Core]):
             self.__automat_automaton__,
             stateAsString=lambda state: state.name,
             inputAsString=lambda input: input,
-            outputAsString=lambda output: output.__name__,
+            outputAsString=lambda output: output.name,
         )
 
 
@@ -487,7 +511,7 @@ class TypeMachineBuilder(Generic[InputProtocol, Core]):
         TypifiedState[InputProtocol, Core]
         | TypifiedDataState[InputProtocol, Core, Any, ...],
         str,
-        Callable[..., object],
+        SomeOutput,
     ] = field(default_factory=Automaton)
     _initial: bool = True
     _registrars: list[TransitionRegistrar[Any, Any, Any]] = field(default_factory=list)
