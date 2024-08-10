@@ -108,7 +108,12 @@ class TransitionRegistrar(Generic[P, P1, R]):
         the data-construction factory for the target state.
         """
         self._result = result
-        self(lambda *args, **kwargs: result)
+
+        def constant(*args: object, **kwargs: object) -> R:
+            return result
+
+        constant.__name__ = f"returns({result})"
+        self(constant)
 
     def _checkComplete(self) -> None:
         """
