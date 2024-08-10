@@ -1,18 +1,18 @@
 # -*- test-case-name: automat._test.test_methodical -*-
 from __future__ import annotations
-import sys
+
 import collections
+import sys
+from dataclasses import dataclass, field
 from functools import wraps
 from inspect import getfullargspec as getArgsSpec
 from itertools import count
-from typing import Callable, Iterable, TypeVar
+from typing import Any, Callable, Iterable, TypeVar
 
 if sys.version_info < (3, 10):
     from typing_extensions import TypeAlias
 else:
     from typing import TypeAlias
-
-import attr
 
 from ._core import Automaton, OutputTracer, Tracer, Transitioner
 from ._introspection import preserveName
@@ -91,15 +91,15 @@ def _keywords_only(f):
     return g
 
 
-@attr.s(frozen=True)
+@dataclass(frozen=True)
 class MethodicalState(object):
     """
     A state for a L{MethodicalMachine}.
     """
 
-    machine = attr.ib(repr=False)
-    method = attr.ib()
-    serialized = attr.ib(repr=False)
+    machine: MethodicalMachine = field(repr=False)
+    method: Callable[..., Any] = field()
+    serialized: bool = field(repr=False)
 
     def upon(self, input, enter=None, outputs=None, collector=list):
         """
@@ -170,7 +170,7 @@ def _docstring():
     """docstring"""
 
 
-def assertNoCode(inst, attribute, f):
+def assertNoCode(f: Callable[..., Any]) -> None:
     # The function body must be empty, i.e. "pass" or "return None", which
     # both yield the same bytecode: LOAD_CONST (None), RETURN_VALUE. We also
     # accept functions with only a docstring, which yields slightly different
@@ -231,26 +231,26 @@ T = TypeVar("T")
 R = TypeVar("R")
 
 
-@attr.s(eq=False, hash=False)
+@dataclass(eq=False)
 class MethodicalInput(object):
     """
     An input for a L{MethodicalMachine}.
     """
 
-    automaton: Automaton[MethodicalState, MethodicalInput, MethodicalOutput] = attr.ib(
+    automaton: Automaton[MethodicalState, MethodicalInput, MethodicalOutput] = field(
         repr=False
     )
-    method = attr.ib(validator=assertNoCode)
-    symbol = attr.ib(repr=False)
-    collectors: dict[MethodicalState, Callable[[Iterable[T]], R]] = attr.ib(
-        default=attr.Factory(dict), repr=False
+    method: Callable[..., Any] = field()
+    symbol: str = field(repr=False)
+    collectors: dict[MethodicalState, Callable[[Iterable[T]], R]] = field(
+        default_factory=dict, repr=False
     )
 
-    argSpec = attr.ib(init=False, repr=False)
+    argSpec: ArgSpec = field(init=False, repr=False)
 
-    @argSpec.default
-    def _buildArgSpec(self):
-        return _getArgSpec(self.method)
+    def __post_init__(self) -> None:
+        self.argSpec = _getArgSpec(self.method)
+        assertNoCode(self.method)
 
     def __get__(self, oself: object, type: None = None) -> object:
         """
@@ -282,19 +282,18 @@ class MethodicalInput(object):
         return self.method.__name__
 
 
-@attr.s(frozen=True)
+@dataclass(frozen=True)
 class MethodicalOutput(object):
     """
     An output for a L{MethodicalMachine}.
     """
 
-    machine = attr.ib(repr=False)
-    method = attr.ib()
-    argSpec = attr.ib(init=False, repr=False)
+    machine: MethodicalMachine = field(repr=False)
+    method: Callable[..., Any]
+    argSpec: ArgSpec = field(init=False, repr=False, compare=False)
 
-    @argSpec.default
-    def _buildArgSpec(self):
-        return _getArgSpec(self.method)
+    def __post_init__(self) -> None:
+        self.__dict__["argSpec"] = _getArgSpec(self.method)
 
     def __get__(self, oself, type=None):
         """
@@ -340,12 +339,12 @@ def wrapTracer(
     return tracer
 
 
-@attr.s(eq=False, hash=False)
+@dataclass(eq=False)
 class MethodicalTracer(object):
-    automaton: Automaton[MethodicalState, MethodicalInput, MethodicalOutput] = attr.ib(
+    automaton: Automaton[MethodicalState, MethodicalInput, MethodicalOutput] = field(
         repr=False
     )
-    symbol: str = attr.ib(repr=False)
+    symbol: str = field(repr=False)
 
     def __get__(
         self, oself: object, type: object = None
