@@ -18,7 +18,6 @@ setup(
         "setuptools-scm",
     ],
     install_requires=[
-        "attrs>=19.2.0",
         'typing_extensions; python_version<"3.10"',
     ],
     extras_require={
