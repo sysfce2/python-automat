@@ -7,7 +7,7 @@ from typing import Protocol
 from unittest import TestCase, skipIf
 
 import attr
-from automat import TypeMachineBuilder
+from automat import TypeMachineBuilder, pep614
 
 from .._methodical import MethodicalMachine
 from .._typified import TypifiedMachine
@@ -82,6 +82,11 @@ def sampleTypeMachine() -> TypifiedMachine:
     begin = builder.state("begin")
     end = builder.state("end")
     begin.upon(Sample.go).to(end).returns(None)
+
+    @pep614(end.upon(Sample.go).to(begin))
+    def out(sample: Sample, core: Core) -> None:
+        "sample output"
+
     return builder.build()
 
 
