@@ -1,12 +1,12 @@
-from __future__ import print_function
+from __future__ import annotations
 
 import functools
 import os
 import subprocess
+from dataclasses import dataclass
 from typing import Protocol
 from unittest import TestCase, skipIf
 
-import attr
 from automat import TypeMachineBuilder, pep614
 
 from .._methodical import MethodicalMachine
@@ -128,13 +128,13 @@ class ElementMakerTests(TestCase):
         self.assertEqual(expected, self.elementMaker("div"))
 
 
-@attr.s
+@dataclass
 class HTMLElement(object):
     """Holds an HTML element, as created by elementMaker."""
 
-    name = attr.ib()
-    children = attr.ib()
-    attributes = attr.ib()
+    name: str
+    children: list[HTMLElement]
+    attributes: dict[str, str]
 
 
 def findElements(element, predicate):
