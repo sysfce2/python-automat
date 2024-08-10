@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sys
 from itertools import chain
-from typing import Callable, Generic, Optional, Sequence, TypeVar
+from typing import Callable, Generic, Optional, Sequence, TypeVar, Hashable
 
 if sys.version_info >= (3, 10):
     from typing import TypeAlias
@@ -17,9 +17,9 @@ else:
     from typing_extensions import TypeAlias
 
 _NO_STATE = "<no state>"
-State = TypeVar("State")
-Input = TypeVar("Input")
-Output = TypeVar("Output")
+State = TypeVar("State", bound=Hashable)
+Input = TypeVar("Input", bound=Hashable)
+Output = TypeVar("Output", bound=Hashable)
 
 
 class NoTransition(Exception, Generic[State, Input]):
