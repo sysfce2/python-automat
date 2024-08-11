@@ -342,3 +342,25 @@ class TypeMachineTests(TestCase):
             builder.state("hello")
         with self.assertRaises(AlreadyBuiltError):
             builder.build()
+
+    def test_methodMembership(self) -> None:
+        """
+        Input methods must be members of their protocol.
+        """
+        builder = TypeMachineBuilder(TestProtocol, NoOpCore)
+        state = builder.state("test-state")
+        def stateful(proto: TestProtocol, core: NoOpCore) -> int:
+            return 4
+        state2 = builder.state("state2", stateful)
+        def change(self: TestProtocol) -> None:
+            "fake copy"
+        def rogue(self: TestProtocol) -> int:
+            "not present"
+            return 3
+        with self.assertRaises(ValueError):
+            state.upon(change)
+        with self.assertRaises(ValueError) as ve:
+            state2.upon(change)
+        print(ve.exception)
+        with self.assertRaises(ValueError):
+            state.upon(rogue)

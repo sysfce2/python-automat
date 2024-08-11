@@ -252,6 +252,7 @@ class TypifiedState(Generic[InputProtocol, Core]):
     def upon(
         self, input: Callable[Concatenate[InputProtocol, P], R]
     ) -> UponFromNo[InputProtocol, Core, P, R]:
+        self.builder._checkMembership(input)
         return UponFromNo(self, input)
 
     def _produce_outputs(
@@ -292,6 +293,7 @@ class TypifiedDataState(Generic[InputProtocol, Core, Data, FactoryParams]):
         UponFromData[InputProtocol, Core, P, R, Data]
         | UponFromNo[InputProtocol, Core, P, R]
     ):
+        self.builder._checkMembership(input)
         if nodata:
             return UponFromNo(self, input)
         else:
@@ -590,3 +592,13 @@ class TypeMachineBuilder(Generic[InputProtocol, Core]):
         )
 
         return TypifiedMachine(runtime_type, self._automaton)
+
+    def _checkMembership(self, input: Callable[..., object]) -> None:
+        """
+        Ensure that ``input`` is a valid member function of the input protocol,
+        not just a function that happens to take the right first argument.
+        """
+        if (checked := getattr(self.protocol, input.__name__, None)) is not input:
+            raise ValueError(
+                f"{input.__qualname__} is not a member of {self.protocol.__module__}.{self.protocol.__name__}"
+            )
