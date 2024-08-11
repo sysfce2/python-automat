@@ -361,6 +361,5 @@ class TypeMachineTests(TestCase):
             state.upon(change)
         with self.assertRaises(ValueError) as ve:
             state2.upon(change)
-        print(ve.exception)
         with self.assertRaises(ValueError):
             state.upon(rogue)
