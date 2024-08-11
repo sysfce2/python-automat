@@ -45,15 +45,10 @@ Data = TypeVar("Data")
 P = ParamSpec("P")
 P1 = ParamSpec("P1")
 R = TypeVar("R")
-OtherInputProtocol = TypeVar("OtherInputProtocol")
 OtherData = TypeVar("OtherData")
-AnyArgs = ParamSpec("AnyArgs")
-AnyResult = TypeVar("AnyResult")
 Decorator = Callable[[Callable[P, R]], Callable[P, R]]
 FactoryParams = ParamSpec("FactoryParams")
 OtherFactoryParams = ParamSpec("OtherFactoryParams")
-AnyCallable = TypeVar("AnyCallable", bound=Callable[..., Any])
-DataArgs = ParamSpec("DataArgs")
 
 
 def pep614(t: R) -> R:
