@@ -1,9 +1,10 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Callable, List, Protocol
 from unittest import TestCase
 
-from .. import TypeMachineBuilder, pep614, NoTransition
+from .. import NoTransition, TypeMachineBuilder, pep614, AlreadyBuiltError
 
 
 class TestProtocol(Protocol):
@@ -23,7 +24,7 @@ class NoOpCore:
     "Just an object, you know?"
 
 
-def buildTestBuilder() -> Callable[[NoOpCore], TestProtocol]:
+def buildTestBuilder() -> tuple[TypeMachineBuilder, Callable[[NoOpCore], TestProtocol]]:
     builder = TypeMachineBuilder(TestProtocol, NoOpCore)
     first = builder.state("first")
     second = builder.state("second")
@@ -39,10 +40,10 @@ def buildTestBuilder() -> Callable[[NoOpCore], TestProtocol]:
     def secondValue(machine: TestProtocol, core: NoOpCore) -> int:
         return 4
 
-    return builder.build()
+    return builder, builder.build()
 
 
-machineFactory = buildTestBuilder()
+builder, machineFactory = buildTestBuilder()
 
 
 def needsSomething(proto: TestProtocol, core: NoOpCore, value: str) -> int:
@@ -319,3 +320,25 @@ class TypeMachineTests(TestCase):
         # that transitions into an error state that requires explicit recovery?
         self.assertEqual(machine.later(), 3)
         self.assertEqual(order, ["startup", "later"])
+
+    def test_buildLock(self) -> None:
+        """
+        ``.build()`` locks the builder so it can no longer be modified.
+        """
+        builder = TypeMachineBuilder(TestProtocol, NoOpCore)
+        state = builder.state("test-state")
+        state2 = builder.state("state2")
+        state3 = builder.state("state3")
+        upon = state.upon(TestProtocol.change)
+        to = upon.to(state2)
+        to2 = upon.to(state3)
+        to.returns(None)
+        with self.assertRaises(ValueError) as ve:
+            to2.returns(None)
+        with self.assertRaises(AlreadyBuiltError):
+            to.returns(None)
+        builder.build()
+        with self.assertRaises(AlreadyBuiltError):
+            builder.state("hello")
+        with self.assertRaises(AlreadyBuiltError):
+            builder.build()

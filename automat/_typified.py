@@ -31,6 +31,14 @@ from ._runtimeproto import (
     runtime_name,
 )
 
+
+class AlreadyBuiltError(Exception):
+    """
+    The :class:`TypeMachine` is already built, and thus can no longer be
+    modified.
+    """
+
+
 InputProtocol = TypeVar("InputProtocol")
 Core = TypeVar("Core")
 Data = TypeVar("Data")
@@ -78,7 +86,6 @@ class TransitionRegistrar(Generic[P, P1, R]):
     _old: AnyState
     _new: AnyState
     _nodata: bool = False
-    _result: R | None = None
     _callback: Callable[P, R] | None = None
 
     def __post_init__(self) -> None:
@@ -89,6 +96,10 @@ class TransitionRegistrar(Generic[P, P1, R]):
         Finalize it with C{__call__} to indicate that there is an
         implementation to the transition, which can be treated as an output.
         """
+        if self._callback is not None:
+            raise AlreadyBuiltError(
+                f"already registered transition from {self._old.name!r} to {self._new.name!r}"
+            )
         self._callback = impl
         builder = self._old.builder
         assert builder is self._new.builder, "states must be from the same builder"
@@ -107,7 +118,6 @@ class TransitionRegistrar(Generic[P, P1, R]):
         the state transition.  The only output generated in this case would be
         the data-construction factory for the target state.
         """
-        self._result = result
 
         def constant(*args: object, **kwargs: object) -> R:
             return result
@@ -237,7 +247,7 @@ class UponFromData(Generic[InputProtocol, Core, P, R, Data]):
 @dataclass(frozen=True)
 class TypifiedState(Generic[InputProtocol, Core]):
     name: str
-    builder: TypeMachineBuilder[InputProtocol, Core]
+    builder: TypeMachineBuilder[InputProtocol, Core] = field(repr=False)
 
     def upon(
         self, input: Callable[Concatenate[InputProtocol, P], R]
@@ -259,7 +269,7 @@ class TypifiedState(Generic[InputProtocol, Core]):
 @dataclass(frozen=True)
 class TypifiedDataState(Generic[InputProtocol, Core, Data, FactoryParams]):
     name: str
-    builder: TypeMachineBuilder[InputProtocol, Core]
+    builder: TypeMachineBuilder[InputProtocol, Core] = field(repr=False)
     factory: Callable[Concatenate[InputProtocol, Core, FactoryParams], Data]
 
     @overload
@@ -517,9 +527,10 @@ class TypeMachineBuilder(Generic[InputProtocol, Core]):
         | TypifiedDataState[InputProtocol, Core, Any, ...],
         str,
         SomeOutput,
-    ] = field(default_factory=Automaton)
+    ] = field(default_factory=Automaton, repr=False)
     _initial: bool = True
     _registrars: list[TransitionRegistrar[Any, Any, Any]] = field(default_factory=list)
+    _built: bool = False
 
     @overload
     def state(self, name: str) -> TypifiedState[InputProtocol, Core]: ...
@@ -540,6 +551,10 @@ class TypeMachineBuilder(Generic[InputProtocol, Core]):
         """
         Construct a state.
         """
+        if self._built:
+            raise AlreadyBuiltError(
+                "Cannot add states to an already-built state machine."
+            )
         if dataFactory is None:
             state = TypifiedState(name, self)
             if self._initial:
@@ -551,7 +566,14 @@ class TypeMachineBuilder(Generic[InputProtocol, Core]):
             return TypifiedDataState(name, self, dataFactory)
 
     def build(self) -> TypifiedMachine[InputProtocol, Core]:
+        """
+        Create a :class:`TypifiedMachine`, and prevent further modification to
+        the state machine being built.
+        """
         # incompleteness check
+        if self._built:
+            raise AlreadyBuiltError("Cannot build a state machine twice.")
+        self._built = True
 
         for registrar in self._registrars:
             registrar._checkComplete()
