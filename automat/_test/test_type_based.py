@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, List, Protocol, TypeVar
+from typing import Callable, Generic, List, Protocol, TypeVar
 from unittest import TestCase
 
 from .. import AlreadyBuiltError, NoTransition, TypeMachineBuilder, pep614
+
+T = TypeVar("T")
 
 
 class TestProtocol(Protocol):
@@ -18,6 +20,7 @@ class TestProtocol(Protocol):
 
 class ArgTaker(Protocol):
     def takeSomeArgs(self, arg1: int = 0, arg2: str = "") -> None: ...
+    def value(self) -> int: ...
 
 
 class NoOpCore:
@@ -415,6 +418,31 @@ class TypeMachineTests(TestCase):
             ).value(),
             7,
         )
+
+    def test_genericData(self) -> None:
+        builder = TypeMachineBuilder(ArgTaker, NoOpCore)
+        one = builder.state("one")
+
+        @dataclass
+        class Gen(Generic[T]):
+            t: T
+
+        def dat(
+            proto: ArgTaker, core: NoOpCore, arg1: int = 0, arg2: str = ""
+        ) -> Gen[int]:
+            return Gen(arg1)
+
+        two = builder.state("two", dat)
+        one.upon(ArgTaker.takeSomeArgs).to(two).returns(None)
+
+        @pep614(two.upon(ArgTaker.value).loop())
+        def val(proto: ArgTaker, core: NoOpCore, data: Gen[int]) -> int:
+            return data.t
+
+        b = builder.build()
+        m = b(NoOpCore())
+        m.takeSomeArgs(3)
+        self.assertEqual(m.value(), 3)
 
     def test_noMethodsInAltStateDataFactory(self) -> None:
         """
