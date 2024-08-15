@@ -252,12 +252,14 @@ class IntegrationTests(TestCase):
     Automat.
     """
 
-    def test_validGraphviz(self):
+    def test_validGraphviz(self) -> None:
         """
         C{graphviz} emits valid graphviz data.
         """
+        digraph = sampleMachine().asDigraph()
+        text = "".join(digraph).encode("utf-8")
         p = subprocess.Popen("dot", stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        out, err = p.communicate("".join(sampleMachine().asDigraph()).encode("utf-8"))
+        out, err = p.communicate(text)
         self.assertEqual(p.returncode, 0)
 
 
