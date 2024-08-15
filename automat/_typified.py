@@ -624,7 +624,7 @@ class TypeMachineBuilder(Generic[InputProtocol, Core]):
         SomeOutput,
     ] = field(default_factory=Automaton, repr=False)
     _initial: bool = True
-    _registrars: list[TransitionRegistrar[Any, Any, Any]] = field(default_factory=list)
+    _registrars: list[TransitionRegistrar[..., ..., Any]] = field(default_factory=list)
     _built: bool = False
 
     @overload
@@ -673,15 +673,17 @@ class TypeMachineBuilder(Generic[InputProtocol, Core]):
         for registrar in self._registrars:
             registrar._checkComplete()
 
-        namespace = {
-            method_name: implementMethod(getattr(self.protocol, method_name))
-            for method_name in actuallyDefinedProtocolMethods(self.protocol)
-        }
+        # We were only hanging on to these for error-checking purposes, so we
+        # can drop them now.
+        del self._registrars[:]
 
         runtimeType: type[TypifiedBase[Core]] = type(
             f"Typified<{runtime_name(self.protocol)}>",
             tuple([TypifiedBase]),
-            namespace,
+            {
+                method_name: implementMethod(getattr(self.protocol, method_name))
+                for method_name in actuallyDefinedProtocolMethods(self.protocol)
+            },
         )
 
         return TypifiedMachine(runtimeType, self._automaton)
