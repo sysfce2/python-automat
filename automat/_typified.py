@@ -379,7 +379,6 @@ class InputImplementer(Generic[InputProtocol, Core]):
         SomeOutput,
     ]
     __automat_data__: object | None = None
-    __automat_initializingData__: bool = False
     __automat_postponed__: list[Callable[[], None]] | None = None
 
 
@@ -391,9 +390,7 @@ def implementMethod(
     Protocol to a L{TypeMachineBuilder}.  It should have a signature matching that
     of the C{method} parameter, a function from that protocol.
     """
-
     methodInput = method.__name__
-
     # side-effects can be re-ordered until later.  If you need to compute a
     # value in your method, then obviously it can't be invoked reentrantly.
     returnAnnotation = _liveSignature(method).return_annotation
@@ -439,7 +436,6 @@ def implementMethod(
     implementation.__qualname__ = implementation.__name__ = (
         f"<implementation for {method}>"
     )
-
     return implementation
 
 
@@ -519,10 +515,6 @@ class MethodOutput(Generic[Core]):
     ) -> object:
         extraArgs = [machine, machine.__automat_core__]
         if self.requiresData:
-            if machine.__automat_initializingData__:
-                raise RuntimeError(
-                    "data factories cannot invoke their state machines reentrantly"
-                )
             self._assertion(dataAtStart)
             extraArgs += [dataAtStart]
         # if anything is invoked reentrantly here, then we can't possibly have
@@ -551,16 +543,9 @@ class DataOutput(Generic[Data]):
         *args: object,
         **kwargs: object,
     ) -> Data:
-        assert (
-            not self.__automat_initializingData__
-        ), "can't initialize while initializing"
-        self.__automat_initializingData__ = True
-        try:
-            newData = realself.dataFactory(self, self.__automat_core__, *args, **kwargs)
-            self.__automat_data__ = newData
-            return newData
-        finally:
-            self.__automat_initializingData__ = False
+        newData = realself.dataFactory(self, self.__automat_core__, *args, **kwargs)
+        self.__automat_data__ = newData
+        return newData
 
 
 INVALID_WHILE_DESERIALIZING: TypedState[Any, Any] = TypedState(
@@ -574,6 +559,7 @@ class TypeMachine(Generic[InputProtocol, Core]):
     """
     A L{TypeMachine} is a factory for instances of C{InputProtocol}.
     """
+
     __automat_type__: type[InputImplementer[InputProtocol, Core]]
     __automat_automaton__: Automaton[
         TypedState[InputProtocol, Core] | TypedDataState[InputProtocol, Core, Any, ...],
