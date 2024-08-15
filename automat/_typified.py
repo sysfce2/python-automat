@@ -595,7 +595,7 @@ class TypifiedMachine(Generic[InputProtocol, Core]):
         internals: TypifiedBase[Core] = self.__automat_type__(
             core, txnr := Transitioner(self.__automat_automaton__, initial)
         )
-        result: InputProtocol = internals      # type:ignore[assignment]
+        result: InputProtocol = internals  # type:ignore[assignment]
 
         if dataFactory is not None:
             internals.__automat_data__ = dataFactory(result, core)
