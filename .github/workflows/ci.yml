@@ -30,7 +30,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Install graphviz
         run: sudo apt-get install -y graphviz
-        if: ${{ matrix.TOX_ENV == extras }}
+        if: ${{ matrix.TOX_ENV == 'extras' }}
       - name: Tox Run
         run:  |
           pip install tox;
