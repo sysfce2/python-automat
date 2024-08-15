@@ -141,7 +141,8 @@ def tool(
     _argv: list[str] = sys.argv[1:],
     _syspath: list[str] = sys.path,
     _findMachines: Callable[
-        [str], Iterator[tuple[str, MethodicalMachine | TypeMachine[InputProtocol, Core]]]
+        [str],
+        Iterator[tuple[str, MethodicalMachine | TypeMachine[InputProtocol, Core]]],
     ] = findMachines,
     _print: Callable[..., None] = print,
 ) -> None:
