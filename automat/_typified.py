@@ -422,18 +422,6 @@ def implementMethod(
 Me = TypeVar("Me", bound="MethodOutput")
 
 
-class Instanceable(type):
-    interface: InterfaceClass
-
-    def __new__(cls, interface: InterfaceClass) -> Instanceable:
-        self = super(cls, cls).__new__(cls, interface.__name__, (), {})
-        self.interface = interface
-        return self
-
-    def __instancecheck__(self, instance: object) -> bool:
-        return self.interface.providedBy(instance)
-
-
 @dataclass(frozen=True)
 class MethodOutput(Generic[Core]):
     """
@@ -446,13 +434,18 @@ class MethodOutput(Generic[Core]):
 
     method: Callable[..., Any]
     requiresData: bool
-    _parameter: object | None
-    _annotation: type[object]
+    _assertion: Callable[[object], None]
 
     @classmethod
     def _fromImpl(cls: type[Me], method: Callable[..., Any], requiresData: bool) -> Me:
         parameter = None
         annotation: type[object] = object
+
+        def assertion(data: object) -> None:
+            """
+            No assertion about the data.
+            """
+
         # Do our best to compute the declared signature, so that we caan verify
         # it's the right type.  We can't always do that.
         try:
@@ -472,9 +465,22 @@ class MethodOutput(Generic[Core]):
                     if origin is not None:
                         annotation = origin
                     if hasInterface and isinstance(annotation, InterfaceClass):
-                        annotation = Instanceable(annotation)
 
-        return cls(method, requiresData, parameter, annotation)
+                        def assertion(data: object) -> None:
+                            assert annotation.providedBy(data), (
+                                f"expected {parameter} to provide {annotation} "
+                                f"but got {type(data)} instead"
+                            )
+
+                    else:
+
+                        def assertion(data: object) -> None:
+                            assert isinstance(data, annotation), (
+                                f"expected {parameter} to be {annotation} "
+                                f"but got {type(data)} instead"
+                            )
+
+        return cls(method, requiresData, assertion)
 
     @property
     def name(self) -> str:
@@ -494,10 +500,7 @@ class MethodOutput(Generic[Core]):
                 raise RuntimeError(
                     "data factories cannot invoke their state machines reentrantly"
                 )
-            assert isinstance(
-                dataAtStart,
-                self._annotation,
-            ), f"expected {self._parameter} to be {self._annotation} but got {type(dataAtStart)} instead"
+            self._assertion(dataAtStart)
             extraArgs += [dataAtStart]
         # if anything is invoked reentrantly here, then we can't possibly have
         # set __automat_data__ and the data argument to the reentrant method
