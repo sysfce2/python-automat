@@ -89,8 +89,7 @@ def sampleTypeMachine() -> TypeMachine[Sample, Core]:
     data.upon(Sample.go).to(end).returns(None)
 
     @pep614(end.upon(Sample.go).to(begin))
-    def out(sample: Sample, core: Core) -> None:
-        "sample output"
+    def out(sample: Sample, core: Core) -> None: ...
 
     return builder.build()
 
