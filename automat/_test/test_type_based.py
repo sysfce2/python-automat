@@ -356,16 +356,14 @@ class TypeMachineTests(TestCase):
         state = builder.state("test-state")
 
         def stateful(proto: TestProtocol, core: NoOpCore) -> int:
-            return 4
+            return 4  # pragma: no cover
 
         state2 = builder.state("state2", stateful)
 
-        def change(self: TestProtocol) -> None:
-            "fake copy"
+        def change(self: TestProtocol) -> None: ...
 
         def rogue(self: TestProtocol) -> int:
-            "not present"
-            return 3
+            return 3  # pragma: no cover
 
         with self.assertRaises(ValueError):
             state.upon(change)
