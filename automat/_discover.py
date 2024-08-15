@@ -8,7 +8,7 @@ from twisted.python.modules import PythonAttribute, PythonModule, getModule
 
 from automat import MethodicalMachine
 
-from ._typified import TypeMachine
+from ._typified import TypeMachine, InputProtocol, Core
 
 
 def isOriginalLocation(attr: PythonAttribute | PythonModule) -> bool:
@@ -30,7 +30,7 @@ def isOriginalLocation(attr: PythonAttribute | PythonModule) -> bool:
 
 def findMachinesViaWrapper(
     within: PythonModule | PythonAttribute,
-) -> Iterator[tuple[str, MethodicalMachine | TypeMachine]]:
+) -> Iterator[tuple[str, MethodicalMachine | TypeMachine[InputProtocol, Core]]]:
     """
     Recursively yield L{MethodicalMachine}s and their FQPNs within a
     L{PythonModule} or a L{twisted.python.modules.PythonAttribute}
@@ -50,7 +50,11 @@ def findMachinesViaWrapper(
     """
     queue = collections.deque([within])
     visited: set[
-        PythonModule | PythonAttribute | MethodicalMachine | TypeMachine | type[Any]
+        PythonModule
+        | PythonAttribute
+        | MethodicalMachine
+        | TypeMachine[InputProtocol, Core]
+        | type[Any]
     ] = set()
 
     while queue:
@@ -145,7 +149,7 @@ def wrapFQPN(fqpn: str) -> PythonModule | PythonAttribute:
 
 def findMachines(
     fqpn: str,
-) -> Iterator[tuple[str, MethodicalMachine | TypeMachine]]:
+) -> Iterator[tuple[str, MethodicalMachine | TypeMachine[InputProtocol, Core]]]:
     """
     Recursively yield L{MethodicalMachine}s and their FQPNs in and
     under the a Python object specified by an FQPN.

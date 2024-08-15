@@ -68,16 +68,15 @@ def sampleMachine():
     return mm
 
 
-def sampleTypeMachine() -> TypeMachine:
+class Sample(Protocol):
+    def go(self) -> None: ...
+class Core: ...
+
+
+def sampleTypeMachine() -> TypeMachine[Sample, Core]:
     """
     Create a sample L{TypeMachine} with some sample states.
     """
-
-    # mm = MethodicalMachine()
-    class Sample(Protocol):
-        def go(self) -> None: ...
-    class Core: ...
-
     builder = TypeMachineBuilder(Sample, Core)
     begin = builder.state("begin")
 

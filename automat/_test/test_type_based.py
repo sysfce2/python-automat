@@ -1,15 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, List, Protocol
+from typing import Callable, List, Protocol, TypeVar
 from unittest import TestCase
 
-from .. import (
-    NoTransition,
-    TypeMachineBuilder,
-    pep614,
-    AlreadyBuiltError,
-)
+from .. import AlreadyBuiltError, NoTransition, TypeMachineBuilder, pep614
 
 
 class TestProtocol(Protocol):
@@ -29,7 +24,11 @@ class NoOpCore:
     "Just an object, you know?"
 
 
-def buildTestBuilder() -> tuple[TypeMachineBuilder, Callable[[NoOpCore], TestProtocol]]:
+def buildTestBuilder() -> (
+    tuple[
+        TypeMachineBuilder[TestProtocol, NoOpCore], Callable[[NoOpCore], TestProtocol]
+    ]
+):
     builder = TypeMachineBuilder(TestProtocol, NoOpCore)
     first = builder.state("first")
     second = builder.state("second")
