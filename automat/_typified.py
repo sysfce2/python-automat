@@ -5,6 +5,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import (
     TYPE_CHECKING,
+    get_origin,
     Any,
     Callable,
     Generic,
@@ -17,6 +18,12 @@ from typing import (
 
 if TYPE_CHECKING:
     from graphviz import Digraph
+try:
+    from zope.interface.interface import InterfaceClass  # type:ignore[import-untyped]
+except ImportError:
+    hasInterface = False
+else:
+    hasInterface = True
 
 if sys.version_info < (3, 10):
     from typing_extensions import Concatenate, ParamSpec, TypeAlias
@@ -415,6 +422,18 @@ def implementMethod(
 Me = TypeVar("Me", bound="MethodOutput")
 
 
+class Instanceable(type):
+    interface: InterfaceClass
+
+    def __new__(cls, interface: InterfaceClass) -> Instanceable:
+        self = super(cls, cls).__new__(cls, interface.__name__, (), {})
+        self.interface = interface
+        return self
+
+    def __instancecheck__(self, instance: object) -> bool:
+        return self.interface.providedBy(instance)
+
+
 @dataclass(frozen=True)
 class MethodOutput(Generic[Core]):
     """
@@ -433,7 +452,7 @@ class MethodOutput(Generic[Core]):
     @classmethod
     def _fromImpl(cls: type[Me], method: Callable[..., Any], requiresData: bool) -> Me:
         parameter = None
-        annotation = object
+        annotation: type[object] = object
         # Do our best to compute the declared signature, so that we caan verify
         # it's the right type.  We can't always do that.
         try:
@@ -449,6 +468,11 @@ class MethodOutput(Generic[Core]):
                 if len(declaredParams) >= 3:
                     parameter = declaredParams[2]
                     annotation = parameter.annotation
+                    origin = get_origin(annotation)
+                    if origin is not None:
+                        annotation = origin
+                    if hasInterface and isinstance(annotation, InterfaceClass):
+                        annotation = Instanceable(annotation)
 
         return cls(method, requiresData, parameter, annotation)
 
@@ -471,7 +495,8 @@ class MethodOutput(Generic[Core]):
                     "data factories cannot invoke their state machines reentrantly"
                 )
             assert isinstance(
-                dataAtStart, self._annotation
+                dataAtStart,
+                self._annotation,
             ), f"expected {self._parameter} to be {self._annotation} but got {type(dataAtStart)} instead"
             extraArgs += [dataAtStart]
         # if anything is invoked reentrantly here, then we can't possibly have
