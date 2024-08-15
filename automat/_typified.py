@@ -547,7 +547,7 @@ INVALID_WHILE_DESERIALIZING: TypifiedState[Any, Any] = TypifiedState(
 
 
 @dataclass(frozen=True)
-class TypifiedMachine(Generic[InputProtocol, Core]):
+class TypeMachine(Generic[InputProtocol, Core]):
     __automat_type__: type[TypifiedBase[Core]]
     __automat_automaton__: Automaton[
         TypifiedState[InputProtocol, Core]
@@ -660,9 +660,9 @@ class TypeMachineBuilder(Generic[InputProtocol, Core]):
             assert not self._initial, "initial state cannot require state-specific data"
             return TypifiedDataState(name, self, dataFactory)
 
-    def build(self) -> TypifiedMachine[InputProtocol, Core]:
+    def build(self) -> TypeMachine[InputProtocol, Core]:
         """
-        Create a :class:`TypifiedMachine`, and prevent further modification to
+        Create a :class:`TypeMachine`, and prevent further modification to
         the state machine being built.
         """
         # incompleteness check
@@ -686,7 +686,7 @@ class TypeMachineBuilder(Generic[InputProtocol, Core]):
             },
         )
 
-        return TypifiedMachine(runtimeType, self._automaton)
+        return TypeMachine(runtimeType, self._automaton)
 
     def _checkMembership(self, input: Callable[..., object]) -> None:
         """

@@ -458,15 +458,3 @@ class TypeMachineTests(TestCase):
         machine = factory(NoOpCore(), data, notouchproto)
         self.assertIs(machine, catchdata[0].proto)
         self.assertEqual(machine.value(), 4)
-
-    def test_errorDuringDataStateConstruction(self) -> None:
-        """
-        The state machine protocol implementation passed to the data state
-        constructor is not yet in a valid state, so invoking methods on it will result in an exception.
-        """
-        builder = TypeMachineBuilder(TestProtocol, NoOpCore)
-        start = builder.state("start")
-        data = builder.state(
-            "data",
-        )
-        builder.build()

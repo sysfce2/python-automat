@@ -10,7 +10,7 @@ from unittest import TestCase, skipIf
 from automat import TypeMachineBuilder, pep614
 
 from .._methodical import MethodicalMachine
-from .._typified import TypifiedMachine
+from .._typified import TypeMachine
 from .test_discover import isTwistedInstalled
 
 
@@ -68,9 +68,9 @@ def sampleMachine():
     return mm
 
 
-def sampleTypeMachine() -> TypifiedMachine:
+def sampleTypeMachine() -> TypeMachine:
     """
-    Create a sample L{TypifiedMachine} with some sample states.
+    Create a sample L{TypeMachine} with some sample states.
     """
 
     # mm = MethodicalMachine()

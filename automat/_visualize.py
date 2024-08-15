@@ -10,7 +10,7 @@ import graphviz
 from ._core import Automaton, Input, Output, State
 from ._discover import findMachines
 from ._methodical import MethodicalMachine
-from ._typified import TypifiedMachine
+from ._typified import TypeMachine
 
 
 def _gvquote(s: str) -> str:
@@ -141,7 +141,7 @@ def tool(
     _argv: list[str] = sys.argv[1:],
     _syspath: list[str] = sys.path,
     _findMachines: Callable[
-        [str], Iterator[tuple[str, MethodicalMachine | TypifiedMachine]]
+        [str], Iterator[tuple[str, MethodicalMachine | TypeMachine]]
     ] = findMachines,
     _print: Callable[..., None] = print,
 ):
