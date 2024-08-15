@@ -41,7 +41,7 @@ from ._runtimeproto import (
 
 class AlreadyBuiltError(Exception):
     """
-    The :class:`TypeMachine` is already built, and thus can no longer be
+    The L{TypeMachine} is already built, and thus can no longer be
     modified.
     """
 
@@ -73,8 +73,8 @@ def pep614(t: R) -> R:
 class TransitionRegistrar(Generic[P, P1, R]):
     """
     This is a record of a transition that need finalizing; it is the result of
-    calling :meth:`TypeMachineBuilder.state` and then
-    ``.upon(input).to(state)`` on the result of that.
+    calling L{TypeMachineBuilder.state} and then ``.upon(input).to(state)`` on
+    the result of that.
 
     It can be used as a decorator, like::
 
@@ -266,7 +266,7 @@ class UponFromData(Generic[InputProtocol, Core, P, R, Data]):
 @dataclass(frozen=True)
 class TypedState(Generic[InputProtocol, Core]):
     """
-    The result of :meth:`.state() <automat.TypeMachineBuilder.state>`.
+    The result of L{.state() <automat.TypeMachineBuilder.state>}.
     """
 
     name: str
@@ -365,10 +365,10 @@ class SomeOutput(Protocol):
 @dataclass
 class InputImplementer(Generic[InputProtocol, Core]):
     """
-    An :class:`InputImplementer` implements an input protocol in terms of a
+    An L{InputImplementer} implements an input protocol in terms of a
     state machine.
 
-    When the factory returned from :class:`TypeMachine`
+    When the factory returned from L{TypeMachine}
     """
 
     __automat_core__: Core
@@ -571,6 +571,9 @@ INVALID_WHILE_DESERIALIZING: TypedState[Any, Any] = TypedState(
 
 @dataclass(frozen=True)
 class TypeMachine(Generic[InputProtocol, Core]):
+    """
+    A L{TypeMachine} is a factory for instances of C{InputProtocol}.
+    """
     __automat_type__: type[InputImplementer[InputProtocol, Core]]
     __automat_automaton__: Automaton[
         TypedState[InputProtocol, Core] | TypedDataState[InputProtocol, Core, Any, ...],
@@ -602,6 +605,10 @@ class TypeMachine(Generic[InputProtocol, Core]):
         ) = None,
         dataFactory: Callable[[InputProtocol, Core], OtherData] | None = None,
     ) -> InputProtocol:
+        """
+        Construct an instance of C{InputProtocol} from an instance of the
+        C{Core} protocol.
+        """
         if state is None:
             state = initial = self.__automat_automaton__.initialState
         elif isinstance(state, TypedDataState):
@@ -707,8 +714,8 @@ class TypeMachineBuilder(Generic[InputProtocol, Core]):
 
     def build(self) -> TypeMachine[InputProtocol, Core]:
         """
-        Create a :class:`TypeMachine`, and prevent further modification to
-        the state machine being built.
+        Create a L{TypeMachine}, and prevent further modification to the state
+        machine being built.
         """
         # incompleteness check
         if self._built:

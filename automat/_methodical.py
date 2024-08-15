@@ -109,10 +109,9 @@ class MethodicalState(object):
         collector: Callable[[Iterable[T]], object] = list,
     ) -> None:
         """
-        Declare a state transition within the
-        :class:`automat.MethodicalMachine` associated with this
-        :class:`automat.MethodicalState`: upon the receipt of the `input`,
-        enter the `state`, emitting each output in `outputs`.
+        Declare a state transition within the L{MethodicalMachine} associated
+        with this L{MethodicalState}: upon the receipt of the `input`, enter
+        the `state`, emitting each output in `outputs`.
 
         @param input: The input triggering a state transition.
 
@@ -379,8 +378,8 @@ def gensym():
 
 class MethodicalMachine(object):
     """
-    A :class:`MethodicalMachine` is an interface to an `Automaton`
-    that uses methods on a class.
+    A L{MethodicalMachine} is an interface to an L{Automaton} that uses methods
+    on a class.
     """
 
     def __init__(self):

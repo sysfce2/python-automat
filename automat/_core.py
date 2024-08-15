@@ -26,13 +26,20 @@ class NoTransition(Exception, Generic[State, Input]):
     """
     A finite state machine in C{state} has no transition for C{symbol}.
 
-    @param state: the finite state machine's state at the time of the illegal
-        transition.
+    @ivar state: See C{state} init parameter.
 
-    @param symbol: the input symbol for which no transition exists.
+    @ivar symbol: See C{symbol} init parameter.
     """
 
     def __init__(self, state: State, symbol: Input):
+        """
+        Construct a L{NoTransition}.
+
+        @param state: the finite state machine's state at the time of the
+            illegal transition.
+
+        @param symbol: the input symbol for which no transition exists.
+        """
         self.state = state
         self.symbol = symbol
         super(Exception, self).__init__(
