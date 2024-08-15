@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from functools import wraps
 from inspect import getfullargspec as getArgsSpec
 from itertools import count
-from typing import Any, Callable, Iterable, TypeVar
+from typing import Any, Callable, Hashable, Iterable, TypeVar
 
 if sys.version_info < (3, 10):
     from typing_extensions import TypeAlias
@@ -101,24 +101,34 @@ class MethodicalState(object):
     method: Callable[..., Any] = field()
     serialized: bool = field(repr=False)
 
-    def upon(self, input, enter=None, outputs=None, collector=list):
+    def upon(
+        self,
+        input: MethodicalInput,
+        enter: MethodicalState | None = None,
+        outputs: Iterable[MethodicalOutput] | None = None,
+        collector: Callable[[Iterable[T]], object] = list,
+    ) -> None:
         """
-        Declare a state transition within the :class:`automat.MethodicalMachine`
-        associated with this :class:`automat.MethodicalState`:
-        upon the receipt of the `input`, enter the `state`,
-        emitting each output in `outputs`.
+        Declare a state transition within the
+        :class:`automat.MethodicalMachine` associated with this
+        :class:`automat.MethodicalState`: upon the receipt of the `input`,
+        enter the `state`, emitting each output in `outputs`.
 
-        :param MethodicalInput input: The input triggering a state transition.
-        :param MethodicalState enter: The resulting state.
-        :param Iterable[MethodicalOutput] outputs: The outputs to be triggered
-            as a result of the declared state transition.
-        :param Callable collector: The function to be used when collecting
-            output return values.
+        @param input: The input triggering a state transition.
 
-        :raises TypeError: if any of the `outputs` signatures do not match
-            the `inputs` signature.
-        :raises ValueError: if the state transition from `self` via `input`
-            has already been defined.
+        @param enter: The resulting state.
+
+        @param outputs: The outputs to be triggered as a result of the declared
+            state transition.
+
+        @param collector: The function to be used when collecting output return
+            values.
+
+        @raises TypeError: if any of the `outputs` signatures do not match the
+            `inputs` signature.
+
+        @raises ValueError: if the state transition from `self` via `input` has
+            already been defined.
         """
         if enter is None:
             enter = self
@@ -140,7 +150,7 @@ class MethodicalState(object):
                 )
         self.machine._oneTransition(self, input, enter, outputs, collector)
 
-    def _name(self):
+    def _name(self) -> str:
         return self.method.__name__
 
 
@@ -389,25 +399,26 @@ class MethodicalMachine(object):
         return self
 
     @_keywords_only
-    def state(self, initial=False, terminal=False, serialized=None):
+    def state(
+        self, initial: bool = False, terminal: bool = False, serialized: Hashable = None
+    ):
         """
         Declare a state, possibly an initial state or a terminal state.
 
         This is a decorator for methods, but it will modify the method so as
         not to be callable any more.
 
-        :param bool initial: is this state the initial state?
-            Only one state on this :class:`automat.MethodicalMachine`
-            may be an initial state; more than one is an error.
+        @param initial: is this state the initial state?  Only one state on
+            this L{automat.MethodicalMachine} may be an initial state; more
+            than one is an error.
 
-        :param bool terminal: Is this state a terminal state?
-            i.e. a state that the machine can end up in?
-            (This is purely informational at this point.)
+        @param terminal: Is this state a terminal state?  i.e. a state that the
+            machine can end up in?  (This is purely informational at this
+            point.)
 
-        :param Hashable serialized: a serializable value
-            to be used to represent this state to external systems.
-            This value should be hashable;
-            :py:func:`unicode` is a good type to use.
+        @param serialized: a serializable value to be used to represent this
+            state to external systems.  This value should be hashable; L{str}
+            is a good type to use.
         """
 
         def decorator(stateMethod):

@@ -151,17 +151,18 @@ def findMachines(
     fqpn: str,
 ) -> Iterator[tuple[str, MethodicalMachine | TypeMachine[InputProtocol, Core]]]:
     """
-    Recursively yield L{MethodicalMachine}s and their FQPNs in and
-    under the a Python object specified by an FQPN.
+    Recursively yield L{MethodicalMachine}s and their FQPNs in and under the a
+    Python object specified by an FQPN.
 
-    The discovery heuristic considers L{MethodicalMachine} instances
-    that are module-level attributes or class-level attributes
-    accessible from module scope.  Machines inside nested classes will
-    be discovered, but those returned from functions or methods will not be.
+    The discovery heuristic considers L{MethodicalMachine} instances that are
+    module-level attributes or class-level attributes accessible from module
+    scope.  Machines inside nested classes will be discovered, but those
+    returned from functions or methods will not be.
 
-    @type within: an FQPN
-    @param within: Where to start the search.
+    @param fqpn: a fully-qualified Python identifier (i.e. the dotted
+        identifier of an object defined at module or class scope, including the
+        package and modele names); where to start the search.
 
-    @return: a generator which yields FQPN, L{MethodicalMachine} pairs.
+    @return: a generator which yields (C{FQPN}, L{MethodicalMachine}) pairs.
     """
     return findMachinesViaWrapper(wrapFQPN(fqpn))

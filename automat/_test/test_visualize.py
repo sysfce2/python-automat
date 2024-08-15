@@ -255,7 +255,7 @@ class IntegrationTests(TestCase):
 
     def test_validGraphviz(self):
         """
-        L{graphviz} emits valid graphviz data.
+        C{graphviz} emits valid graphviz data.
         """
         p = subprocess.Popen("dot", stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         out, err = p.communicate("".join(sampleMachine().asDigraph()).encode("utf-8"))
@@ -272,8 +272,8 @@ class SpotChecks(TestCase):
 
     def test_containsMachineFeatures(self):
         """
-        The output of L{graphviz} should contain the names of the states,
-        inputs, outputs in the state machine.
+        The output of L{graphviz.Digraph} should contain the names of the
+        states, inputs, outputs in the state machine.
         """
         gvout = "".join(sampleMachine().asDigraph())
         self.assertIn("begin", gvout)
@@ -283,7 +283,7 @@ class SpotChecks(TestCase):
 
     def test_containsTypeMachineFeatures(self):
         """
-        The output of L{graphviz} should contain the names of the states,
+        The output of L{graphviz.Digraph} should contain the names of the states,
         inputs, outputs in the state machine.
         """
         gvout = "".join(sampleTypeMachine().asDigraph())

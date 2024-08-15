@@ -72,7 +72,21 @@ def pep614(t: R) -> R:
 @dataclass()
 class TransitionRegistrar(Generic[P, P1, R]):
     """
-    This is a record of a transition that need finalizing.
+    This is a record of a transition that need finalizing; it is the result of
+    calling :meth:`TypeMachineBuilder.state` and then
+    ``.upon(input).to(state)`` on the result of that.
+
+    It can be used as a decorator, like::
+
+        registrar = state.upon(Proto.input).to(state2)
+        @registrar
+        def inputImplementation(proto: Proto, core: Core) -> Result: ...
+
+    Or, it can be used used to implement a constant return value with
+    L{TransitionRegistrar.returns}, like::
+
+        registrar = state.upon(Proto.input).to(state2)
+        registrar.returns(value)
 
     Type parameter P: the precise signature of the decorated implementation
     callable.
@@ -568,9 +582,7 @@ class TypeMachine(Generic[InputProtocol, Core]):
     def __call__(self, core: Core) -> InputProtocol: ...
     @overload
     def __call__(
-        self,
-        core: Core,
-        state: TypedState[InputProtocol, Core],
+        self, core: Core, state: TypedState[InputProtocol, Core]
     ) -> InputProtocol: ...
     @overload
     def __call__(
@@ -625,14 +637,12 @@ class TypeMachine(Generic[InputProtocol, Core]):
 class TypeMachineBuilder(Generic[InputProtocol, Core]):
     """
     The main entry-point into Automat, used to construct a factory for
-    instances of ``InputProtocol`` that take an instance of ``Core``.
+    instances of C{InputProtocol} that take an instance of C{Core}.
 
-    Describe the machine with :meth:`TypeMachineBuilder.state` :meth:`.upon
-    <automat._typified.TypedState.upon>` :meth:`.to
-    <automat._typified.UponFromNo.to>`, then build it with
-    :meth:`TypeMachineBuilder.build`, like so:
-
-    .. code-block:: python
+    Describe the machine with L{TypeMachineBuilder.state} L{.upon
+    <automat._typified.TypedState.upon>} L{.to
+    <automat._typified.UponFromNo.to>}, then build it with
+    L{TypeMachineBuilder.build}, like so::
 
         from typing import Protocol
         class Inputs(Protocol):
@@ -648,6 +658,7 @@ class TypeMachineBuilder(Generic[InputProtocol, Core]):
         machine = Machine(Core())
         machine.method()
     """
+
     # Public constructor parameters.
     inputProtocol: ProtocolAtRuntime[InputProtocol]
     coreType: type[Core]
