@@ -38,6 +38,7 @@ class AlreadyBuiltError(Exception):
     modified.
     """
 
+
 InputProtocol = TypeVar("InputProtocol")
 Core = TypeVar("Core")
 Data = TypeVar("Data")
@@ -551,7 +552,10 @@ class TypifiedMachine(Generic[InputProtocol, Core]):
             initial = self.__automat_automaton__.initialState
         elif isinstance(state, TypifiedDataState):
             assert dataFactory is not None, "data state requires a data factory"
-            initial = TypifiedState("automat:invalid-while-deserializing", None)  # type:ignore[arg-type]
+            initial = TypifiedState(
+                "automat:invalid-while-deserializing",
+                None,  # type:ignore[arg-type]
+            )
         else:
             initial = state
 
