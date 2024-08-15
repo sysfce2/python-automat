@@ -2,9 +2,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Callable, Generic, List, Protocol, TypeVar
-from unittest import TestCase
+from unittest import TestCase, skipIf
 
 from .. import AlreadyBuiltError, NoTransition, TypeMachineBuilder, pep614
+
+try:
+    from zope.interface import Interface, implementer  # type:ignore[import-untyped]
+except ImportError:
+    hasInterface = False
+else:
+    hasInterface = True
+
+    class ISomething(Interface):
+        def something() -> int: ...  # type:ignore[misc,empty-body]
+
 
 T = TypeVar("T")
 
@@ -420,6 +431,9 @@ class TypeMachineTests(TestCase):
         )
 
     def test_genericData(self) -> None:
+        """
+        Test to cover get_origin in generic assertion.
+        """
         builder = TypeMachineBuilder(ArgTaker, NoOpCore)
         one = builder.state("one")
 
@@ -443,6 +457,39 @@ class TypeMachineTests(TestCase):
         m = b(NoOpCore())
         m.takeSomeArgs(3)
         self.assertEqual(m.value(), 3)
+
+    @skipIf(not hasInterface, "zope.interface not installed")
+    def test_interfaceData(self) -> None:
+        """
+        Test to cover providedBy assertion.
+        """
+        builder = TypeMachineBuilder(ArgTaker, NoOpCore)
+        one = builder.state("one")
+
+        @implementer(ISomething)
+        @dataclass
+        class Something:
+            val: int
+            def something(self) -> int:
+                return self.val
+
+        def dat(
+            proto: ArgTaker, core: NoOpCore, arg1: int = 0, arg2: str = ""
+        ) -> ISomething:
+            return Something(arg1)  # type:ignore[return-value]
+
+        two = builder.state("two", dat)
+        one.upon(ArgTaker.takeSomeArgs).to(two).returns(None)
+
+        @pep614(two.upon(ArgTaker.value).loop())
+        def val(proto: ArgTaker, core: NoOpCore, data: ISomething) -> int:
+            return data.something()  # type:ignore[misc]
+
+        b = builder.build()
+        m = b(NoOpCore())
+        m.takeSomeArgs(3)
+        self.assertEqual(m.value(), 3)
+
 
     def test_noMethodsInAltStateDataFactory(self) -> None:
         """
