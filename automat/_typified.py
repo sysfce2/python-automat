@@ -347,10 +347,10 @@ class SomeOutput(Protocol):
 
 
 @dataclass
-class TypifiedBase(Generic[Core]):
+class TypifiedBase(Generic[InputProtocol, Core]):
     __automat_core__: Core
     __automat_transitioner__: Transitioner[
-        TypifiedState | TypifiedDataState,
+        TypifiedState[InputProtocol, Core] | TypifiedDataState[InputProtocol, Core, object, ...],
         str,
         SomeOutput,
     ]
@@ -376,7 +376,7 @@ def implementMethod(
     returnsNone = returnAnnotation is None
 
     def implementation(
-        self: TypifiedBase[Core], *args: object, **kwargs: object
+        self: TypifiedBase[InputProtocol, Core], *args: object, **kwargs: object
     ) -> object:
         transitioner = self.__automat_transitioner__
         dataAtStart = self.__automat_data__
@@ -419,9 +419,6 @@ def implementMethod(
     return implementation
 
 
-Me = TypeVar("Me", bound="MethodOutput")
-
-
 @dataclass(frozen=True)
 class MethodOutput(Generic[Core]):
     """
@@ -437,7 +434,9 @@ class MethodOutput(Generic[Core]):
     _assertion: Callable[[object], None]
 
     @classmethod
-    def _fromImpl(cls: type[Me], method: Callable[..., Any], requiresData: bool) -> Me:
+    def _fromImpl(
+        cls: type[MethodOutput[Core]], method: Callable[..., Any], requiresData: bool
+    ) -> MethodOutput[Core]:
         parameter = None
         annotation: type[object] = object
 
@@ -488,7 +487,7 @@ class MethodOutput(Generic[Core]):
 
     def __call__(
         self,
-        machine: TypifiedBase[Core],
+        machine: TypifiedBase[InputProtocol, Core],
         dataAtStart: Data,
         /,
         *args: object,
@@ -523,7 +522,7 @@ class DataOutput(Generic[Data]):
 
     def __call__(
         realself,
-        self: TypifiedBase[Core],
+        self: TypifiedBase[InputProtocol, Core],
         dataAtStart: object,
         *args: object,
         **kwargs: object,
@@ -548,7 +547,7 @@ INVALID_WHILE_DESERIALIZING: TypifiedState[Any, Any] = TypifiedState(
 
 @dataclass(frozen=True)
 class TypeMachine(Generic[InputProtocol, Core]):
-    __automat_type__: type[TypifiedBase[Core]]
+    __automat_type__: type[TypifiedBase[InputProtocol, Core]]
     __automat_automaton__: Automaton[
         TypifiedState[InputProtocol, Core]
         | TypifiedDataState[InputProtocol, Core, Any, ...],
@@ -592,7 +591,7 @@ class TypeMachine(Generic[InputProtocol, Core]):
         else:
             initial = state
 
-        internals: TypifiedBase[Core] = self.__automat_type__(
+        internals: TypifiedBase[InputProtocol, Core] = self.__automat_type__(
             core, txnr := Transitioner(self.__automat_automaton__, initial)
         )
         result: InputProtocol = internals  # type:ignore[assignment]
@@ -677,7 +676,7 @@ class TypeMachineBuilder(Generic[InputProtocol, Core]):
         # can drop them now.
         del self._registrars[:]
 
-        runtimeType: type[TypifiedBase[Core]] = type(
+        runtimeType: type[TypifiedBase[InputProtocol, Core]] = type(
             f"Typified<{runtime_name(self.protocol)}>",
             tuple([TypifiedBase]),
             {
