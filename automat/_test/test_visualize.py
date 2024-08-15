@@ -80,8 +80,14 @@ def sampleTypeMachine() -> TypifiedMachine:
 
     builder = TypeMachineBuilder(Sample, Core)
     begin = builder.state("begin")
+
+    def buildit(proto: Sample, core: Core) -> int:
+        return 3
+
+    data = builder.state("data", buildit)
     end = builder.state("end")
-    begin.upon(Sample.go).to(end).returns(None)
+    begin.upon(Sample.go).to(data).returns(None)
+    data.upon(Sample.go).to(end).returns(None)
 
     @pep614(end.upon(Sample.go).to(begin))
     def out(sample: Sample, core: Core) -> None:
@@ -285,6 +291,7 @@ class SpotChecks(TestCase):
         self.assertIn("begin", gvout)
         self.assertIn("end", gvout)
         self.assertIn("go", gvout)
+        self.assertIn("data:buildit", gvout)
         self.assertIn("out", gvout)
 
 
