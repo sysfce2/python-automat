@@ -81,7 +81,7 @@ def sampleTypeMachine() -> TypeMachine[Sample, Core]:
     begin = builder.state("begin")
 
     def buildit(proto: Sample, core: Core) -> int:
-        return 3
+        return 3  # pragma: no cover
 
     data = builder.state("data", buildit)
     end = builder.state("end")
