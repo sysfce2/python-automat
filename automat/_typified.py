@@ -540,6 +540,12 @@ class DataOutput(Generic[Data]):
             self.__automat_initializingData__ = False
 
 
+INVALID_WHILE_DESERIALIZING: TypifiedState[Any, Any] = TypifiedState(
+    "automat:invalid-while-deserializing",
+    None,  # type:ignore[arg-type]
+)
+
+
 @dataclass(frozen=True)
 class TypifiedMachine(Generic[InputProtocol, Core]):
     __automat_type__: type[TypifiedBase[Core]]
@@ -577,30 +583,23 @@ class TypifiedMachine(Generic[InputProtocol, Core]):
         dataFactory: Callable[[InputProtocol, Core], OtherData] | None = None,
     ) -> InputProtocol:
         if state is None:
-            initial = self.__automat_automaton__.initialState
+            state = initial = self.__automat_automaton__.initialState
         elif isinstance(state, TypifiedDataState):
             assert dataFactory is not None, "data state requires a data factory"
-            initial = TypifiedState(
-                "automat:invalid-while-deserializing",
-                None,  # type:ignore[arg-type]
-            )
+            # Ensure that the machine is in a state with *no* transitions while
+            # we are doing the initial construction of its state-specific data.
+            initial = INVALID_WHILE_DESERIALIZING
         else:
             initial = state
 
-        result: Any = self.__automat_type__(
-            core,
-            Transitioner(
-                self.__automat_automaton__,
-                initial,
-            ),
+        internals: TypifiedBase[Core] = self.__automat_type__(
+            core, txnr := Transitioner(self.__automat_automaton__, initial)
         )
+        result: InputProtocol = internals      # type:ignore[assignment]
+
         if dataFactory is not None:
-            # XXX 'result' is in an inconsistent state here.  it's nominally in
-            # state `state`, but does not yet have its data populated for
-            # `state`, so all methods will receive None if they are invoked
-            # here.
-            result.__automat_data__ = dataFactory(result, core)
-            result.__automat_transitioner__._state = state
+            internals.__automat_data__ = dataFactory(result, core)
+            txnr._state = state
         return result
 
     def asDigraph(self) -> Digraph:
