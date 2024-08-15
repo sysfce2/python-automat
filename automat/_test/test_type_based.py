@@ -38,6 +38,11 @@ class NoOpCore:
     "Just an object, you know?"
 
 
+@dataclass
+class Gen(Generic[T]):
+    t: T
+
+
 def buildTestBuilder() -> (
     tuple[
         TypeMachineBuilder[TestProtocol, NoOpCore], Callable[[NoOpCore], TestProtocol]
@@ -436,10 +441,6 @@ class TypeMachineTests(TestCase):
         """
         builder = TypeMachineBuilder(ArgTaker, NoOpCore)
         one = builder.state("one")
-
-        @dataclass
-        class Gen(Generic[T]):
-            t: T
 
         def dat(
             proto: ArgTaker, core: NoOpCore, arg1: int = 0, arg2: str = ""
