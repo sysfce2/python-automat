@@ -7,10 +7,11 @@ API Docs
 .. autoclass:: automat.TypeMachineBuilder
    :members: state, build
 
-.. autoclass:: automat._typified.TypifiedState
-   :members: to
-.. autoclass:: automat._typified.TypifiedDataState
-   :members: to
+.. autoclass:: automat._typified.TypedState
+   :members: upon
+
+.. autoclass:: automat._typified.TypedDataState
+   :members: upon
 
 .. autoclass:: automat.MethodicalMachine
    :members: input, output, state

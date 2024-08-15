@@ -149,20 +149,17 @@ class UponFromNo(Generic[InputProtocol, Core, P, R]):
     Type parameter P: the signature of the input method.
     """
 
-    old: (
-        TypifiedState[InputProtocol, Core]
-        | TypifiedDataState[InputProtocol, Core, Any, ...]
-    )
+    old: TypedState[InputProtocol, Core] | TypedDataState[InputProtocol, Core, Any, ...]
     input: Callable[Concatenate[InputProtocol, P], R]
 
     @overload
     def to(
-        self, state: TypifiedState[InputProtocol, Core]
+        self, state: TypedState[InputProtocol, Core]
     ) -> TransitionRegistrar[Concatenate[InputProtocol, Core, P], P, R]: ...
     @overload
     def to(
         self,
-        state: TypifiedDataState[InputProtocol, Core, OtherData, P],
+        state: TypedDataState[InputProtocol, Core, OtherData, P],
     ) -> TransitionRegistrar[
         Concatenate[InputProtocol, Core, P],
         Concatenate[InputProtocol, P],
@@ -171,8 +168,8 @@ class UponFromNo(Generic[InputProtocol, Core, P, R]):
     def to(
         self,
         state: (
-            TypifiedState[InputProtocol, Core]
-            | TypifiedDataState[InputProtocol, Core, Any, P]
+            TypedState[InputProtocol, Core]
+            | TypedDataState[InputProtocol, Core, Any, P]
         ),
     ) -> (
         TransitionRegistrar[Concatenate[InputProtocol, Core, P], P, R]
@@ -204,19 +201,19 @@ class UponFromData(Generic[InputProtocol, Core, P, R, Data]):
     Type parameter P: the signature of the input method.
     """
 
-    old: TypifiedDataState[InputProtocol, Core, Data, ...]
+    old: TypedDataState[InputProtocol, Core, Data, ...]
     input: Callable[Concatenate[InputProtocol, P], R]
 
     @overload
     def to(
-        self, state: TypifiedState[InputProtocol, Core]
+        self, state: TypedState[InputProtocol, Core]
     ) -> TransitionRegistrar[
         Concatenate[InputProtocol, Core, Data, P], Concatenate[InputProtocol, P], R
     ]: ...
     @overload
     def to(
         self,
-        state: TypifiedDataState[InputProtocol, Core, OtherData, P],
+        state: TypedDataState[InputProtocol, Core, OtherData, P],
     ) -> TransitionRegistrar[
         Concatenate[InputProtocol, Core, Data, P],
         Concatenate[InputProtocol, P],
@@ -225,8 +222,8 @@ class UponFromData(Generic[InputProtocol, Core, P, R, Data]):
     def to(
         self,
         state: (
-            TypifiedState[InputProtocol, Core]
-            | TypifiedDataState[InputProtocol, Core, Any, P]
+            TypedState[InputProtocol, Core]
+            | TypedDataState[InputProtocol, Core, Any, P]
         ),
     ) -> (
         TransitionRegistrar[Concatenate[InputProtocol, Core, P], P, R]
@@ -253,13 +250,18 @@ class UponFromData(Generic[InputProtocol, Core, P, R, Data]):
 
 
 @dataclass(frozen=True)
-class TypifiedState(Generic[InputProtocol, Core]):
+class TypedState(Generic[InputProtocol, Core]):
+    """
+    The result of :meth:`.state() <automat.TypeMachineBuilder.state>`.
+    """
+
     name: str
     builder: TypeMachineBuilder[InputProtocol, Core] = field(repr=False)
 
     def upon(
         self, input: Callable[Concatenate[InputProtocol, P], R]
     ) -> UponFromNo[InputProtocol, Core, P, R]:
+        ".upon()"
         self.builder._checkMembership(input)
         return UponFromNo(self, input)
 
@@ -267,16 +269,16 @@ class TypifiedState(Generic[InputProtocol, Core]):
         self,
         impl: Callable[..., object],
         old: (
-            TypifiedDataState[InputProtocol, Core, OtherData, OtherFactoryParams]
-            | TypifiedState[InputProtocol, Core]
+            TypedDataState[InputProtocol, Core, OtherData, OtherFactoryParams]
+            | TypedState[InputProtocol, Core]
         ),
         nodata: bool = False,
     ) -> Iterable[SomeOutput]:
-        yield MethodOutput._fromImpl(impl, isinstance(old, TypifiedDataState))
+        yield MethodOutput._fromImpl(impl, isinstance(old, TypedDataState))
 
 
 @dataclass(frozen=True)
-class TypifiedDataState(Generic[InputProtocol, Core, Data, FactoryParams]):
+class TypedDataState(Generic[InputProtocol, Core, Data, FactoryParams]):
     name: str
     builder: TypeMachineBuilder[InputProtocol, Core] = field(repr=False)
     factory: Callable[Concatenate[InputProtocol, Core, FactoryParams], Data]
@@ -311,23 +313,23 @@ class TypifiedDataState(Generic[InputProtocol, Core, Data, FactoryParams]):
         self,
         impl: Callable[..., object],
         old: (
-            TypifiedDataState[InputProtocol, Core, OtherData, OtherFactoryParams]
-            | TypifiedState[InputProtocol, Core]
+            TypedDataState[InputProtocol, Core, OtherData, OtherFactoryParams]
+            | TypedState[InputProtocol, Core]
         ),
         nodata: bool,
     ) -> Iterable[SomeOutput]:
         if self is not old:
             yield DataOutput(self.factory)
         yield MethodOutput._fromImpl(
-            impl, isinstance(old, TypifiedDataState) and not nodata
+            impl, isinstance(old, TypedDataState) and not nodata
         )
 
 
-AnyState: TypeAlias = "TypifiedState[Any, Any] | TypifiedDataState[Any, Any, Any, Any]"
+AnyState: TypeAlias = "TypedState[Any, Any] | TypedDataState[Any, Any, Any, Any]"
 
 
 @dataclass
-class TypifiedInput:
+class TypedInput:
     name: str
 
 
@@ -347,10 +349,18 @@ class SomeOutput(Protocol):
 
 
 @dataclass
-class TypifiedBase(Generic[InputProtocol, Core]):
+class InputImplementer(Generic[InputProtocol, Core]):
+    """
+    An :class:`InputImplementer` implements an input protocol in terms of a
+    state machine.
+
+    When the factory returned from :class:`TypeMachine`
+    """
+
     __automat_core__: Core
     __automat_transitioner__: Transitioner[
-        TypifiedState[InputProtocol, Core] | TypifiedDataState[InputProtocol, Core, object, ...],
+        TypedState[InputProtocol, Core]
+        | TypedDataState[InputProtocol, Core, object, ...],
         str,
         SomeOutput,
     ]
@@ -376,7 +386,7 @@ def implementMethod(
     returnsNone = returnAnnotation is None
 
     def implementation(
-        self: TypifiedBase[InputProtocol, Core], *args: object, **kwargs: object
+        self: InputImplementer[InputProtocol, Core], *args: object, **kwargs: object
     ) -> object:
         transitioner = self.__automat_transitioner__
         dataAtStart = self.__automat_data__
@@ -424,7 +434,7 @@ class MethodOutput(Generic[Core]):
     """
     This is the thing that goes into the automaton's outputs list, and thus
     (per the implementation of L{implementMethod}) takes the 'self' of the
-    TypifiedBase instance (i.e. the synthetic protocol implementation) and the
+    InputImplementer instance (i.e. the synthetic protocol implementation) and the
     previous result computed by the former output, which will be None
     initially.
     """
@@ -487,7 +497,7 @@ class MethodOutput(Generic[Core]):
 
     def __call__(
         self,
-        machine: TypifiedBase[InputProtocol, Core],
+        machine: InputImplementer[InputProtocol, Core],
         dataAtStart: Data,
         /,
         *args: object,
@@ -522,7 +532,7 @@ class DataOutput(Generic[Data]):
 
     def __call__(
         realself,
-        self: TypifiedBase[InputProtocol, Core],
+        self: InputImplementer[InputProtocol, Core],
         dataAtStart: object,
         *args: object,
         **kwargs: object,
@@ -539,7 +549,7 @@ class DataOutput(Generic[Data]):
             self.__automat_initializingData__ = False
 
 
-INVALID_WHILE_DESERIALIZING: TypifiedState[Any, Any] = TypifiedState(
+INVALID_WHILE_DESERIALIZING: TypedState[Any, Any] = TypedState(
     "automat:invalid-while-deserializing",
     None,  # type:ignore[arg-type]
 )
@@ -547,10 +557,9 @@ INVALID_WHILE_DESERIALIZING: TypifiedState[Any, Any] = TypifiedState(
 
 @dataclass(frozen=True)
 class TypeMachine(Generic[InputProtocol, Core]):
-    __automat_type__: type[TypifiedBase[InputProtocol, Core]]
+    __automat_type__: type[InputImplementer[InputProtocol, Core]]
     __automat_automaton__: Automaton[
-        TypifiedState[InputProtocol, Core]
-        | TypifiedDataState[InputProtocol, Core, Any, ...],
+        TypedState[InputProtocol, Core] | TypedDataState[InputProtocol, Core, Any, ...],
         str,
         SomeOutput,
     ]
@@ -561,13 +570,13 @@ class TypeMachine(Generic[InputProtocol, Core]):
     def __call__(
         self,
         core: Core,
-        state: TypifiedState[InputProtocol, Core],
+        state: TypedState[InputProtocol, Core],
     ) -> InputProtocol: ...
     @overload
     def __call__(
         self,
         core: Core,
-        state: TypifiedDataState[InputProtocol, Core, OtherData, ...],
+        state: TypedDataState[InputProtocol, Core, OtherData, ...],
         dataFactory: Callable[[InputProtocol, Core], OtherData],
     ) -> InputProtocol: ...
 
@@ -575,15 +584,15 @@ class TypeMachine(Generic[InputProtocol, Core]):
         self,
         core: Core,
         state: (
-            TypifiedState[InputProtocol, Core]
-            | TypifiedDataState[InputProtocol, Core, OtherData, ...]
+            TypedState[InputProtocol, Core]
+            | TypedDataState[InputProtocol, Core, OtherData, ...]
             | None
         ) = None,
         dataFactory: Callable[[InputProtocol, Core], OtherData] | None = None,
     ) -> InputProtocol:
         if state is None:
             state = initial = self.__automat_automaton__.initialState
-        elif isinstance(state, TypifiedDataState):
+        elif isinstance(state, TypedDataState):
             assert dataFactory is not None, "data state requires a data factory"
             # Ensure that the machine is in a state with *no* transitions while
             # we are doing the initial construction of its state-specific data.
@@ -591,7 +600,7 @@ class TypeMachine(Generic[InputProtocol, Core]):
         else:
             initial = state
 
-        internals: TypifiedBase[InputProtocol, Core] = self.__automat_type__(
+        internals: InputImplementer[InputProtocol, Core] = self.__automat_type__(
             core, txnr := Transitioner(self.__automat_automaton__, initial)
         )
         result: InputProtocol = internals  # type:ignore[assignment]
@@ -614,34 +623,60 @@ class TypeMachine(Generic[InputProtocol, Core]):
 
 @dataclass(eq=False)
 class TypeMachineBuilder(Generic[InputProtocol, Core]):
-    protocol: ProtocolAtRuntime[InputProtocol]
-    core_type: type[Core]
+    """
+    The main entry-point into Automat, used to construct a factory for
+    instances of ``InputProtocol`` that take an instance of ``Core``.
+
+    Describe the machine with :meth:`TypeMachineBuilder.state` :meth:`.upon
+    <automat._typified.TypedState.upon>` :meth:`.to
+    <automat._typified.UponFromNo.to>`, then build it with
+    :meth:`TypeMachineBuilder.build`, like so:
+
+    .. code-block:: python
+
+        from typing import Protocol
+        class Inputs(Protocol):
+            def method(self) -> None: ...
+        class Core: ...
+
+        from automat import TypeMachineBuilder
+        builder = TypeMachineBuilder(Inputs, Core)
+        state = builder.state("state")
+        state.upon(Inputs.method).loop().returns(None)
+        Machine = builder.build()
+
+        machine = Machine(Core())
+        machine.method()
+    """
+    # Public constructor parameters.
+    inputProtocol: ProtocolAtRuntime[InputProtocol]
+    coreType: type[Core]
+
+    # Internal state, not in the constructor.
     _automaton: Automaton[
-        TypifiedState[InputProtocol, Core]
-        | TypifiedDataState[InputProtocol, Core, Any, ...],
+        TypedState[InputProtocol, Core] | TypedDataState[InputProtocol, Core, Any, ...],
         str,
         SomeOutput,
-    ] = field(default_factory=Automaton, repr=False)
-    _initial: bool = True
-    _registrars: list[TransitionRegistrar[..., ..., Any]] = field(default_factory=list)
-    _built: bool = False
+    ] = field(default_factory=Automaton, repr=False, init=False)
+    _initial: bool = field(default=True, init=False)
+    _registrars: list[TransitionRegistrar[..., ..., Any]] = field(
+        default_factory=list, init=False
+    )
+    _built: bool = field(default=False, init=False)
 
     @overload
-    def state(self, name: str) -> TypifiedState[InputProtocol, Core]: ...
+    def state(self, name: str) -> TypedState[InputProtocol, Core]: ...
     @overload
     def state(
         self,
         name: str,
         dataFactory: Callable[Concatenate[InputProtocol, Core, P], Data],
-    ) -> TypifiedDataState[InputProtocol, Core, Data, P]: ...
+    ) -> TypedDataState[InputProtocol, Core, Data, P]: ...
     def state(
         self,
         name: str,
         dataFactory: Callable[Concatenate[InputProtocol, Core, P], Data] | None = None,
-    ) -> (
-        TypifiedState[InputProtocol, Core]
-        | TypifiedDataState[InputProtocol, Core, Data, P]
-    ):
+    ) -> TypedState[InputProtocol, Core] | TypedDataState[InputProtocol, Core, Data, P]:
         """
         Construct a state.
         """
@@ -650,14 +685,14 @@ class TypeMachineBuilder(Generic[InputProtocol, Core]):
                 "Cannot add states to an already-built state machine."
             )
         if dataFactory is None:
-            state = TypifiedState(name, self)
+            state = TypedState(name, self)
             if self._initial:
                 self._initial = False
                 self._automaton.initialState = state
             return state
         else:
             assert not self._initial, "initial state cannot require state-specific data"
-            return TypifiedDataState(name, self, dataFactory)
+            return TypedDataState(name, self, dataFactory)
 
     def build(self) -> TypeMachine[InputProtocol, Core]:
         """
@@ -676,12 +711,12 @@ class TypeMachineBuilder(Generic[InputProtocol, Core]):
         # can drop them now.
         del self._registrars[:]
 
-        runtimeType: type[TypifiedBase[InputProtocol, Core]] = type(
-            f"Typified<{runtime_name(self.protocol)}>",
-            tuple([TypifiedBase]),
+        runtimeType: type[InputImplementer[InputProtocol, Core]] = type(
+            f"Typed<{runtime_name(self.inputProtocol)}>",
+            tuple([InputImplementer]),
             {
-                method_name: implementMethod(getattr(self.protocol, method_name))
-                for method_name in actuallyDefinedProtocolMethods(self.protocol)
+                method_name: implementMethod(getattr(self.inputProtocol, method_name))
+                for method_name in actuallyDefinedProtocolMethods(self.inputProtocol)
             },
         )
 
@@ -692,7 +727,7 @@ class TypeMachineBuilder(Generic[InputProtocol, Core]):
         Ensure that ``input`` is a valid member function of the input protocol,
         not just a function that happens to take the right first argument.
         """
-        if (checked := getattr(self.protocol, input.__name__, None)) is not input:
+        if (checked := getattr(self.inputProtocol, input.__name__, None)) is not input:
             raise ValueError(
-                f"{input.__qualname__} is not a member of {self.protocol.__module__}.{self.protocol.__name__}"
+                f"{input.__qualname__} is not a member of {self.inputProtocol.__module__}.{self.inputProtocol.__name__}"
             )

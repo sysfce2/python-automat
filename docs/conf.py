@@ -56,16 +56,14 @@ author = 'Glyph'
 # |version| and |release|, also used in various other places throughout the
 # built documents.
 
-def _get_release():
-    import pkg_resources
+def _get_release() -> str:
+    import importlib.metadata
     try:
-        distribution = pkg_resources.get_distribution(project)
-    except pkg_resources.DistributionNotFound:
+        return importlib.metadata.version(project)
+    except importlib.metadata.PackageNotFoundError:
         raise Exception(
             "You must install Automat to build the documentation."
         )
-    else:
-        return distribution.version
 
 # The full version, including alpha/beta/rc tags.
 release = _get_release()
@@ -78,7 +76,7 @@ version = '.'.join(release.split('.')[:2])
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+language = "en"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -134,7 +132,7 @@ htmlhelp_basename = 'automatdoc'
 
 # -- Options for LaTeX output ---------------------------------------------
 
-latex_elements = {
+latex_elements: dict[str,str] = {
     # The paper size ('letterpaper' or 'a4paper').
     #
     # 'papersize': 'letterpaper',

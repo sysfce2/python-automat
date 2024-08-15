@@ -211,17 +211,16 @@ Now, we can call it:
 
 Except... wait a second, what's that `None` doing there?
 
-Since every input can produce multiple outputs, in automat,
-the default return value from every input invocation is a `list`.
-In this case, we have both `_heat_the_heating_element`
-and `_describe_coffee` outputs, so we're seeing both of their return values.
-However, this can be customized, with the `collector` argument to :py:meth:`.upon`;
-the `collector` is a callable which takes an iterable of all the outputs'
-return values and "collects" a single return value
-to return to the caller of the state machine.
+Since every input can produce multiple outputs, in automat, the default return
+value from every input invocation is a `list`.  In this case, we have both
+`_heat_the_heating_element` and `_describe_coffee` outputs, so we're seeing
+both of their return values.  However, this can be customized, with the
+`collector` argument to :py:meth:`MethodicalMachine.upon`; the `collector` is a
+callable which takes an iterable of all the outputs' return values and
+"collects" a single return value to return to the caller of the state machine.
 
 In this case, we only care about the last output,
-so we can adjust the call to :py:meth:`.upon` like this:
+so we can adjust the call to :py:meth:`MethodicalMachine.upon` like this:
 
 .. code-block:: python
 
@@ -327,13 +326,13 @@ If I can't get the state of the state machine, how can I save it to (a database,
 TKTKTK
 
 - no need for ``serialized=`` because we can use the ``str`` values passed to
-  ``TypeMachineBuilder.state``, those have to be serializable
+  :py:meth:`TypeMachineBuilder.state`, those have to be serializable
 
 - we can just implement serialization as a regular input, the only thing that
   we are missing is the ability to jump to a specific state using the built
   constructor.  so that constructor can optionally take a state argument, and
-  be ``@overload``-ed such that a ``TypifiedDataState`` requires a parameter of
-  the ``Data`` typevar type, whereas ``TypifiedState`` does not.  Then we can
+  be ``@overload``-ed such that a ``TypedState`` requires a parameter of
+  the ``Data`` typevar type, whereas ``TypedDataState`` does not.  Then we can
   just instantiate the transitioner with the appropriate state variable.
 
 
