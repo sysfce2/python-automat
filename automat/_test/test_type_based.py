@@ -20,7 +20,7 @@ else:
 T = TypeVar("T")
 
 
-class TestProtocol(Protocol):
+class ProtocolForTesting(Protocol):
 
     def change(self) -> None:
         "Switch to the other state."
@@ -43,24 +43,23 @@ class Gen(Generic[T]):
     t: T
 
 
-def buildTestBuilder() -> (
-    tuple[
-        TypeMachineBuilder[TestProtocol, NoOpCore], Callable[[NoOpCore], TestProtocol]
-    ]
-):
-    builder = TypeMachineBuilder(TestProtocol, NoOpCore)
+def buildTestBuilder() -> tuple[
+    TypeMachineBuilder[ProtocolForTesting, NoOpCore],
+    Callable[[NoOpCore], ProtocolForTesting],
+]:
+    builder = TypeMachineBuilder(ProtocolForTesting, NoOpCore)
     first = builder.state("first")
     second = builder.state("second")
 
-    first.upon(TestProtocol.change).to(second).returns(None)
-    second.upon(TestProtocol.change).to(first).returns(None)
+    first.upon(ProtocolForTesting.change).to(second).returns(None)
+    second.upon(ProtocolForTesting.change).to(first).returns(None)
 
-    @pep614(first.upon(TestProtocol.value).loop())
-    def firstValue(machine: TestProtocol, core: NoOpCore) -> int:
+    @pep614(first.upon(ProtocolForTesting.value).loop())
+    def firstValue(machine: ProtocolForTesting, core: NoOpCore) -> int:
         return 3
 
-    @pep614(second.upon(TestProtocol.value).loop())
-    def secondValue(machine: TestProtocol, core: NoOpCore) -> int:
+    @pep614(second.upon(ProtocolForTesting.value).loop())
+    def secondValue(machine: ProtocolForTesting, core: NoOpCore) -> int:
         return 4
 
     return builder, builder.build()
@@ -69,7 +68,7 @@ def buildTestBuilder() -> (
 builder, machineFactory = buildTestBuilder()
 
 
-def needsSomething(proto: TestProtocol, core: NoOpCore, value: str) -> int:
+def needsSomething(proto: ProtocolForTesting, core: NoOpCore, value: str) -> int:
     "we need data to build this state"
     return 3  # pragma: no cover
 
@@ -183,7 +182,7 @@ class TypeMachineTests(TestCase):
         )
 
     def test_dataToData(self) -> None:
-        builder = TypeMachineBuilder(TestProtocol, NoOpCore)
+        builder = TypeMachineBuilder(ProtocolForTesting, NoOpCore)
 
         @dataclass
         class Data1:
@@ -197,17 +196,17 @@ class TypeMachineTests(TestCase):
         counting = builder.state("counting", lambda proto, core: Data1(1))
         appending = builder.state("appending", lambda proto, core: Data2([]))
 
-        initial.upon(TestProtocol.change).to(counting).returns(None)
+        initial.upon(ProtocolForTesting.change).to(counting).returns(None)
 
-        @pep614(counting.upon(TestProtocol.value).loop())
-        def countup(p: TestProtocol, c: NoOpCore, d: Data1) -> int:
+        @pep614(counting.upon(ProtocolForTesting.value).loop())
+        def countup(p: ProtocolForTesting, c: NoOpCore, d: Data1) -> int:
             d.value *= 2
             return d.value
 
-        counting.upon(TestProtocol.change).to(appending).returns(None)
+        counting.upon(ProtocolForTesting.change).to(appending).returns(None)
 
-        @pep614(appending.upon(TestProtocol.value).loop())
-        def appendup(p: TestProtocol, c: NoOpCore, d: Data2) -> int:
+        @pep614(appending.upon(ProtocolForTesting.value).loop())
+        def appendup(p: ProtocolForTesting, c: NoOpCore, d: Data2) -> int:
             d.stuff.extend("abc")
             return len(d.stuff)
 
@@ -225,7 +224,7 @@ class TypeMachineTests(TestCase):
         Any data factory that takes arguments will constrain the allowed
         signature of all protocol methods that transition into that state.
         """
-        builder = TypeMachineBuilder(TestProtocol, NoOpCore)
+        builder = TypeMachineBuilder(ProtocolForTesting, NoOpCore)
         initial = builder.state("initial")
         data = builder.state("data", needsSomething)
         data2 = builder.state("data2", needsSomething)
@@ -233,11 +232,11 @@ class TypeMachineTests(TestCase):
 
         # 'assertions' in the form of expected type errors:
         # (no data -> data)
-        uponNoData = initial.upon(TestProtocol.change)
+        uponNoData = initial.upon(ProtocolForTesting.change)
         uponNoData.to(data)  # type:ignore[arg-type]
 
         # (data -> data)
-        uponData = data.upon(TestProtocol.change)
+        uponData = data.upon(ProtocolForTesting.change)
         uponData.to(data2)  # type:ignore[arg-type]
 
     def test_dataFactoryNoArgs(self) -> None:
@@ -258,7 +257,7 @@ class TypeMachineTests(TestCase):
         """
         Invalid transitions raise a NoTransition exception.
         """
-        builder = TypeMachineBuilder(TestProtocol, NoOpCore)
+        builder = TypeMachineBuilder(ProtocolForTesting, NoOpCore)
         builder.state("initial")
         factory = builder.build()
         machine = factory(NoOpCore())
@@ -348,11 +347,11 @@ class TypeMachineTests(TestCase):
         """
         ``.build()`` locks the builder so it can no longer be modified.
         """
-        builder = TypeMachineBuilder(TestProtocol, NoOpCore)
+        builder = TypeMachineBuilder(ProtocolForTesting, NoOpCore)
         state = builder.state("test-state")
         state2 = builder.state("state2")
         state3 = builder.state("state3")
-        upon = state.upon(TestProtocol.change)
+        upon = state.upon(ProtocolForTesting.change)
         to = upon.to(state2)
         to2 = upon.to(state3)
         to.returns(None)
@@ -370,17 +369,17 @@ class TypeMachineTests(TestCase):
         """
         Input methods must be members of their protocol.
         """
-        builder = TypeMachineBuilder(TestProtocol, NoOpCore)
+        builder = TypeMachineBuilder(ProtocolForTesting, NoOpCore)
         state = builder.state("test-state")
 
-        def stateful(proto: TestProtocol, core: NoOpCore) -> int:
+        def stateful(proto: ProtocolForTesting, core: NoOpCore) -> int:
             return 4  # pragma: no cover
 
         state2 = builder.state("state2", stateful)
 
-        def change(self: TestProtocol) -> None: ...
+        def change(self: ProtocolForTesting) -> None: ...
 
-        def rogue(self: TestProtocol) -> int:
+        def rogue(self: ProtocolForTesting) -> int:
             return 3  # pragma: no cover
 
         with self.assertRaises(ValueError):
@@ -394,24 +393,24 @@ class TypeMachineTests(TestCase):
         """
         The state machine can be started in an alternate state.
         """
-        builder = TypeMachineBuilder(TestProtocol, NoOpCore)
+        builder = TypeMachineBuilder(ProtocolForTesting, NoOpCore)
         one = builder.state("one")
         two = builder.state("two")
 
         @dataclass
         class Three:
-            proto: TestProtocol
+            proto: ProtocolForTesting
             core: NoOpCore
             value: int = 0
 
         three = builder.state("three", Three)
-        one.upon(TestProtocol.change).to(two).returns(None)
-        one.upon(TestProtocol.value).loop().returns(1)
-        two.upon(TestProtocol.change).to(three).returns(None)
-        two.upon(TestProtocol.value).loop().returns(2)
+        one.upon(ProtocolForTesting.change).to(two).returns(None)
+        one.upon(ProtocolForTesting.value).loop().returns(1)
+        two.upon(ProtocolForTesting.change).to(three).returns(None)
+        two.upon(ProtocolForTesting.value).loop().returns(2)
 
-        @pep614(three.upon(TestProtocol.value).loop())
-        def threevalue(proto: TestProtocol, core: NoOpCore, three: Three) -> int:
+        @pep614(three.upon(ProtocolForTesting.value).loop())
+        def threevalue(proto: ProtocolForTesting, core: NoOpCore, three: Three) -> int:
             return 3 + three.value
 
         onetwothree = builder.build()
@@ -498,33 +497,33 @@ class TypeMachineTests(TestCase):
         construction, it is in an invalid state.  It may be invoked after
         construction is complete.
         """
-        builder = TypeMachineBuilder(TestProtocol, NoOpCore)
+        builder = TypeMachineBuilder(ProtocolForTesting, NoOpCore)
 
         @dataclass
         class Data:
             value: int
-            proto: TestProtocol
+            proto: ProtocolForTesting
 
         start = builder.state("start")
         data = builder.state("data", lambda proto, core: Data(3, proto))
 
-        @pep614(data.upon(TestProtocol.value).loop())
-        def getval(proto: TestProtocol, core: NoOpCore, data: Data) -> int:
+        @pep614(data.upon(ProtocolForTesting.value).loop())
+        def getval(proto: ProtocolForTesting, core: NoOpCore, data: Data) -> int:
             return data.value
 
-        @pep614(start.upon(TestProtocol.value).loop())
-        def minusone(proto: TestProtocol, core: NoOpCore) -> int:
+        @pep614(start.upon(ProtocolForTesting.value).loop())
+        def minusone(proto: ProtocolForTesting, core: NoOpCore) -> int:
             return -1
 
         factory = builder.build()
         self.assertEqual(factory(NoOpCore()).value(), -1)
 
-        def touchproto(proto: TestProtocol, core: NoOpCore) -> Data:
+        def touchproto(proto: ProtocolForTesting, core: NoOpCore) -> Data:
             return Data(proto.value(), proto)
 
         catchdata = []
 
-        def notouchproto(proto: TestProtocol, core: NoOpCore) -> Data:
+        def notouchproto(proto: ProtocolForTesting, core: NoOpCore) -> Data:
             catchdata.append(new := Data(4, proto))
             return new
 
