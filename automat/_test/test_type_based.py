@@ -470,6 +470,7 @@ class TypeMachineTests(TestCase):
         @dataclass
         class Something:
             val: int
+
             def something(self) -> int:
                 return self.val
 
@@ -489,7 +490,6 @@ class TypeMachineTests(TestCase):
         m = b(NoOpCore())
         m.takeSomeArgs(3)
         self.assertEqual(m.value(), 3)
-
 
     def test_noMethodsInAltStateDataFactory(self) -> None:
         """
