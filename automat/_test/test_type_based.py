@@ -4,7 +4,12 @@ from dataclasses import dataclass
 from typing import Callable, List, Protocol
 from unittest import TestCase
 
-from .. import NoTransition, TypeMachineBuilder, pep614, AlreadyBuiltError
+from .. import (
+    NoTransition,
+    TypeMachineBuilder,
+    pep614,
+    AlreadyBuiltError,
+)
 
 
 class TestProtocol(Protocol):
@@ -349,17 +354,121 @@ class TypeMachineTests(TestCase):
         """
         builder = TypeMachineBuilder(TestProtocol, NoOpCore)
         state = builder.state("test-state")
+
         def stateful(proto: TestProtocol, core: NoOpCore) -> int:
             return 4
+
         state2 = builder.state("state2", stateful)
+
         def change(self: TestProtocol) -> None:
             "fake copy"
+
         def rogue(self: TestProtocol) -> int:
             "not present"
             return 3
+
         with self.assertRaises(ValueError):
             state.upon(change)
         with self.assertRaises(ValueError) as ve:
             state2.upon(change)
         with self.assertRaises(ValueError):
             state.upon(rogue)
+
+    def test_startInAlternateState(self) -> None:
+        """
+        The state machine can be started in an alternate state.
+        """
+        builder = TypeMachineBuilder(TestProtocol, NoOpCore)
+        one = builder.state("one")
+        two = builder.state("two")
+
+        @dataclass
+        class Three:
+            proto: TestProtocol
+            core: NoOpCore
+            value: int = 0
+
+        three = builder.state("three", Three)
+        one.upon(TestProtocol.change).to(two).returns(None)
+        one.upon(TestProtocol.value).loop().returns(1)
+        two.upon(TestProtocol.change).to(three).returns(None)
+        two.upon(TestProtocol.value).loop().returns(2)
+
+        @pep614(three.upon(TestProtocol.value).loop())
+        def threevalue(proto: TestProtocol, core: NoOpCore, three: Three) -> int:
+            return 3 + three.value
+
+        onetwothree = builder.build()
+
+        # confirm positive behavior first, particularly the value of the three
+        # state's change
+        normal = onetwothree(NoOpCore())
+        self.assertEqual(normal.value(), 1)
+        normal.change()
+        self.assertEqual(normal.value(), 2)
+        normal.change()
+        self.assertEqual(normal.value(), 3)
+
+        # now try deserializing it in each state
+        self.assertEqual(onetwothree(NoOpCore()).value(), 1)
+        self.assertEqual(onetwothree(NoOpCore(), two).value(), 2)
+        self.assertEqual(
+            onetwothree(
+                NoOpCore(), three, lambda proto, core: Three(proto, core, 4)
+            ).value(),
+            7,
+        )
+
+    def test_noMethodsInAltStateDataFactory(self) -> None:
+        """
+        When the state machine is received by a data factory during
+        construction, it is in an invalid state.  It may be invoked after
+        construction is complete.
+        """
+        builder = TypeMachineBuilder(TestProtocol, NoOpCore)
+
+        @dataclass
+        class Data:
+            value: int
+            proto: TestProtocol
+
+        start = builder.state("start")
+        data = builder.state("data", lambda proto, core: Data(3, proto))
+
+        @pep614(data.upon(TestProtocol.value).loop())
+        def getval(proto: TestProtocol, core: NoOpCore, data: Data) -> int:
+            return data.value
+
+        @pep614(start.upon(TestProtocol.value).loop())
+        def minusone(proto: TestProtocol, core: NoOpCore) -> int:
+            return -1
+
+        factory = builder.build()
+        self.assertEqual(factory(NoOpCore()).value(), -1)
+
+        def touchproto(proto: TestProtocol, core: NoOpCore) -> Data:
+            return Data(proto.value(), proto)
+
+        catchdata = []
+
+        def notouchproto(proto: TestProtocol, core: NoOpCore) -> Data:
+            catchdata.append(new := Data(4, proto))
+            return new
+
+        with self.assertRaises(NoTransition):
+            factory(NoOpCore(), data, touchproto)
+        machine = factory(NoOpCore(), data, notouchproto)
+        self.assertIs(machine, catchdata[0].proto)
+        self.assertEqual(machine.value(), 4)
+
+    def test_errorDuringDataStateConstruction(self) -> None:
+        """
+        The state machine protocol implementation passed to the data state
+        constructor is not yet in a valid state, so invoking methods on it will result in an exception.
+        """
+        builder = TypeMachineBuilder(TestProtocol, NoOpCore)
+        start = builder.state("start")
+        data = builder.state(
+            "data",
+        )
+        builder.build()

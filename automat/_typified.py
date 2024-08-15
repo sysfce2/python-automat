@@ -38,7 +38,6 @@ class AlreadyBuiltError(Exception):
     modified.
     """
 
-
 InputProtocol = TypeVar("InputProtocol")
 Core = TypeVar("Core")
 Data = TypeVar("Data")
@@ -102,7 +101,7 @@ class TransitionRegistrar(Generic[P, P1, R]):
             self._old,
             self._signature.__name__,
             self._new,
-            tuple(self._new._produce_outputs(impl, self._old, self._nodata)),
+            tuple(self._new._produceOutputs(impl, self._old, self._nodata)),
         )
         return impl
 
@@ -185,6 +184,9 @@ class UponFromNo(Generic[InputProtocol, Core, P, R]):
         Concatenate[InputProtocol, P],
         R,
     ]:
+        """
+        Register a transition back to the same state.
+        """
         return TransitionRegistrar(self.input, self.old, self.old, True)
 
 
@@ -236,6 +238,9 @@ class UponFromData(Generic[InputProtocol, Core, P, R, Data]):
         Concatenate[InputProtocol, P],
         R,
     ]:
+        """
+        Register a transition back to the same state.
+        """
         return TransitionRegistrar(self.input, self.old, self.old)
 
 
@@ -250,7 +255,7 @@ class TypifiedState(Generic[InputProtocol, Core]):
         self.builder._checkMembership(input)
         return UponFromNo(self, input)
 
-    def _produce_outputs(
+    def _produceOutputs(
         self,
         impl: Callable[..., object],
         old: (
@@ -259,7 +264,7 @@ class TypifiedState(Generic[InputProtocol, Core]):
         ),
         nodata: bool = False,
     ) -> Iterable[SomeOutput]:
-        yield MethodOutput(impl, isinstance(old, TypifiedDataState))
+        yield MethodOutput._fromImpl(impl, isinstance(old, TypifiedDataState))
 
 
 @dataclass(frozen=True)
@@ -294,7 +299,7 @@ class TypifiedDataState(Generic[InputProtocol, Core, Data, FactoryParams]):
         else:
             return UponFromData(self, input)
 
-    def _produce_outputs(
+    def _produceOutputs(
         self,
         impl: Callable[..., object],
         old: (
@@ -305,7 +310,9 @@ class TypifiedDataState(Generic[InputProtocol, Core, Data, FactoryParams]):
     ) -> Iterable[SomeOutput]:
         if self is not old:
             yield DataOutput(self.factory)
-        yield MethodOutput(impl, isinstance(old, TypifiedDataState) and not nodata)
+        yield MethodOutput._fromImpl(
+            impl, isinstance(old, TypifiedDataState) and not nodata
+        )
 
 
 AnyState: TypeAlias = "TypifiedState[Any, Any] | TypifiedDataState[Any, Any, Any, Any]"
@@ -340,7 +347,7 @@ class TypifiedBase(Generic[Core]):
         SomeOutput,
     ]
     __automat_data__: object | None = None
-    __automat_initializing_data__: bool = False
+    __automat_initializingData__: bool = False
     __automat_postponed__: list[Callable[[], None]] | None = None
 
 
@@ -353,24 +360,24 @@ def implementMethod(
     of the C{method} parameter, a function from that protocol.
     """
 
-    method_input = method.__name__
+    methodInput = method.__name__
 
     # side-effects can be re-ordered until later.  If you need to compute a
     # value in your method, then obviously it can't be invoked reentrantly.
-    return_annotation = _liveSignature(method).return_annotation
-    is_procedure = return_annotation is None
+    returnAnnotation = _liveSignature(method).return_annotation
+    returnsNone = returnAnnotation is None
 
     def implementation(
         self: TypifiedBase[Core], *args: object, **kwargs: object
     ) -> object:
         transitioner = self.__automat_transitioner__
-        data_at_start = self.__automat_data__
+        dataAtStart = self.__automat_data__
         if self.__automat_postponed__ is not None:
-            if not is_procedure:
+            if not returnsNone:
                 raise RuntimeError(
                     f"attempting to reentrantly run {method.__qualname__} "
-                    f"but it wants to return {return_annotation!r} not None "
-                    f"({return_annotation is None} {is_procedure})"
+                    f"but it wants to return {returnAnnotation!r} not None "
+                    f"({returnAnnotation is None} {returnsNone})"
                 )
 
             def rerunme() -> None:
@@ -380,7 +387,7 @@ def implementMethod(
             return None
         postponed = self.__automat_postponed__ = []
         try:
-            [outputs, tracer] = transitioner.transition(method_input)
+            [outputs, tracer] = transitioner.transition(methodInput)
             result: Any = None
             for output in outputs:
                 # here's the idea: there will be a state-setup output and a
@@ -390,7 +397,7 @@ def implementMethod(
                 # that state, the protocol is in a self-consistent state and can
                 # run reentrant outputs.  not clear that state-teardown outputs are
                 # necessary
-                result = output(self, data_at_start, *args, **kwargs)
+                result = output(self, dataAtStart, *args, **kwargs)
         finally:
             self.__automat_postponed__ = None
         while postponed:
@@ -404,6 +411,9 @@ def implementMethod(
     return implementation
 
 
+Me = TypeVar("Me", bound="MethodOutput")
+
+
 @dataclass(frozen=True)
 class MethodOutput(Generic[Core]):
     """
@@ -415,40 +425,59 @@ class MethodOutput(Generic[Core]):
     """
 
     method: Callable[..., Any]
-    requires_data: bool
+    requiresData: bool
+    _parameter: object | None
+    _annotation: type[object]
+
+    @classmethod
+    def _fromImpl(cls: type[Me], method: Callable[..., Any], requiresData: bool) -> Me:
+        parameter = None
+        annotation = object
+        # Do our best to compute the declared signature, so that we caan verify
+        # it's the right type.  We can't always do that.
+        try:
+            sig = _liveSignature(method)
+        except NameError:
+            ...
+            # An inner function may refer to type aliases that only appear as
+            # local variables, and those are just lost here; give up.
+        else:
+            if requiresData:
+                # 0: self, 1: self.__automat_core__, 2: self.__automat_data__
+                declaredParams = list(sig.parameters.values())
+                if len(declaredParams) >= 3:
+                    parameter = declaredParams[2]
+                    annotation = parameter.annotation
+
+        return cls(method, requiresData, parameter, annotation)
 
     @property
     def name(self) -> str:
         return f"{self.method.__name__}"
 
-    # sig = _liveSignature(method)
-    # if requires_data:
-    #     # 0: self, 1: self.__automat_core__, 2: self.__automat_data__
-    #     param = list(sig.parameters.values())[2]
-    #     ann = param.annotation
-
     def __call__(
-        realself,
-        self: TypifiedBase[Core],
-        data_at_start: Data,
+        self,
+        machine: TypifiedBase[Core],
+        dataAtStart: Data,
+        /,
         *args: object,
         **kwargs: object,
     ) -> object:
-        extra_args = [self, self.__automat_core__]
-        if realself.requires_data:
-            # if self.__automat_initializing_data__:
-            #     raise RuntimeError(
-            #         f"data factories cannot invoke their state machines reentrantly {}"
-            #     )
-            # assert isinstance(
-            #     data_at_start, ann
-            # ), f"expected {param=} to be {ann=} but got {type(data_at_start)=} instead"
-            extra_args += [data_at_start]
+        extraArgs = [machine, machine.__automat_core__]
+        if self.requiresData:
+            if machine.__automat_initializingData__:
+                raise RuntimeError(
+                    "data factories cannot invoke their state machines reentrantly"
+                )
+            assert isinstance(
+                dataAtStart, self._annotation
+            ), f"expected {self._parameter} to be {self._annotation} but got {type(dataAtStart)} instead"
+            extraArgs += [dataAtStart]
         # if anything is invoked reentrantly here, then we can't possibly have
         # set __automat_data__ and the data argument to the reentrant method
         # will be wrong.  we *need* to split out the construction / state-enter
         # hook, because it needs to run separately.
-        return realself.method(*extra_args, *args, **kwargs)
+        return self.method(*extraArgs, *args, **kwargs)
 
 
 @dataclass(frozen=True)
@@ -457,31 +486,29 @@ class DataOutput(Generic[Data]):
     Construct an output for the given data objects.
     """
 
-    data_factory: Callable[..., Data]
+    dataFactory: Callable[..., Data]
 
     @property
     def name(self) -> str:
-        return f"data:{self.data_factory.__name__}"
+        return f"data:{self.dataFactory.__name__}"
 
     def __call__(
         realself,
         self: TypifiedBase[Core],
-        data_at_start: object,
+        dataAtStart: object,
         *args: object,
         **kwargs: object,
     ) -> Data:
         assert (
-            not self.__automat_initializing_data__
+            not self.__automat_initializingData__
         ), "can't initialize while initializing"
-        self.__automat_initializing_data__ = True
+        self.__automat_initializingData__ = True
         try:
-            new_data = realself.data_factory(
-                self, self.__automat_core__, *args, **kwargs
-            )
-            self.__automat_data__ = new_data
-            return new_data
+            newData = realself.dataFactory(self, self.__automat_core__, *args, **kwargs)
+            self.__automat_data__ = newData
+            return newData
         finally:
-            self.__automat_initializing_data__ = False
+            self.__automat_initializingData__ = False
 
 
 @dataclass(frozen=True)
@@ -494,14 +521,54 @@ class TypifiedMachine(Generic[InputProtocol, Core]):
         SomeOutput,
     ]
 
-    def __call__(self, core: Core) -> InputProtocol:
+    @overload
+    def __call__(self, core: Core) -> InputProtocol: ...
+    @overload
+    def __call__(
+        self,
+        core: Core,
+        state: TypifiedState[InputProtocol, Core],
+    ) -> InputProtocol: ...
+    @overload
+    def __call__(
+        self,
+        core: Core,
+        state: TypifiedDataState[InputProtocol, Core, OtherData, ...],
+        dataFactory: Callable[[InputProtocol, Core], OtherData],
+    ) -> InputProtocol: ...
+
+    def __call__(
+        self,
+        core: Core,
+        state: (
+            TypifiedState[InputProtocol, Core]
+            | TypifiedDataState[InputProtocol, Core, OtherData, ...]
+            | None
+        ) = None,
+        dataFactory: Callable[[InputProtocol, Core], OtherData] | None = None,
+    ) -> InputProtocol:
+        if state is None:
+            initial = self.__automat_automaton__.initialState
+        elif isinstance(state, TypifiedDataState):
+            assert dataFactory is not None, "data state requires a data factory"
+            initial = TypifiedState("automat:invalid-while-deserializing", None)  # type:ignore[arg-type]
+        else:
+            initial = state
+
         result: Any = self.__automat_type__(
             core,
             Transitioner(
                 self.__automat_automaton__,
-                self.__automat_automaton__.initialState,
+                initial,
             ),
         )
+        if dataFactory is not None:
+            # XXX 'result' is in an inconsistent state here.  it's nominally in
+            # state `state`, but does not yet have its data populated for
+            # `state`, so all methods will receive None if they are invoked
+            # here.
+            result.__automat_data__ = dataFactory(result, core)
+            result.__automat_transitioner__._state = state
         return result
 
     def asDigraph(self) -> Digraph:
@@ -580,13 +647,13 @@ class TypeMachineBuilder(Generic[InputProtocol, Core]):
             for method_name in actuallyDefinedProtocolMethods(self.protocol)
         }
 
-        runtime_type: type[TypifiedBase[Core]] = type(
+        runtimeType: type[TypifiedBase[Core]] = type(
             f"Typified<{runtime_name(self.protocol)}>",
             tuple([TypifiedBase]),
             namespace,
         )
 
-        return TypifiedMachine(runtime_type, self._automaton)
+        return TypifiedMachine(runtimeType, self._automaton)
 
     def _checkMembership(self, input: Callable[..., object]) -> None:
         """
