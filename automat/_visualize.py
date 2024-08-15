@@ -144,7 +144,7 @@ def tool(
         [str], Iterator[tuple[str, MethodicalMachine | TypeMachine]]
     ] = findMachines,
     _print: Callable[..., None] = print,
-):
+) -> None:
     """
     Entry point for command line utility.
     """
