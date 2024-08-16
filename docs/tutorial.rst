@@ -1,51 +1,26 @@
-===========
-Quick Start
-===========
+Tutorial: Building a Garage Door Controller
+===========================================
 
+Let's consider :ref:`the garage door example from the
+introduction<Garage-Example>`.
 
-What makes Automat different?
-=============================
-There are `dozens of libraries on PyPI implementing state machines
-<https://pypi.org/search/?q=finite+state+machine>`_.
-So it behooves me to say why yet another one would be a good idea.
-
-Automat is designed around the following principle:
-while organizing your code around state machines is a good idea,
-your callers don't, and shouldn't have to, care that you've done so.
-
-In Python, the "input" to a stateful system is a method call;
-the "output" may be a method call, if you need to invoke a side effect,
-or a return value, if you are just performing a computation in memory.
-Most other state-machine libraries require you to explicitly create an input object,
-provide that object to a generic "input" method, and then receive results,
-sometimes in terms of that library's interfaces and sometimes in terms of
-classes you define yourself.
-
-Therefore, from the outside, an Automat state machine looks like a Plain Old
-Python Object (POPO).  It has methods, and the methods have type annotations,
-and you can call them and get their documented return values.
-
-A Case Study: Garage Door Controller
-====================================
-
-Let's consider :ref:`the garage door example from the introduction<Garage-Example>`.
-
-As previously mentioned, Automat takes great care to present a state machine as
-a collection of regular methods.  So we define what those methods *are* with a
+Automat takes great care to present a state machine as a collection of regular
+methods.  So we define what those methods *are* with a
 :py:class:`typing.Protocol` that describes them.
 
 .. literalinclude:: examples/garage_door.py
    :pyobject: GarageController
 
 This protocol tells us that only 3 things can happen to our controller from the
-outside world (its inputs): the user can push the button, the "door is all the way up"
-sensor can emit a signal, or the "door is all the way down" sensor can emit a
-signal.  So those are our inputs.
+outside world (its inputs): the user can push the button, the "door is all the
+way up" sensor can emit a signal, or the "door is all the way down" sensor can
+emit a signal.  So those are our inputs.
 
 However, our state machine also needs to be able to *affect* things in the
 world (its outputs). As we are writing a program in Python, these come in the
 form of a Python object that can be shared between all the states that
-implement our controller, and for this purpose we define a simple shared-data class:
+implement our controller, and for this purpose we define a simple shared-data
+class:
 
 .. literalinclude:: examples/garage_door.py
    :pyobject: DoorDevices
@@ -53,7 +28,8 @@ implement our controller, and for this purpose we define a simple shared-data cl
 Here we have a reference to a ``Motor`` that can open and close the door, and
 an ``Alarm`` that can beep to alert people that the door is closing.
 
-Next we need to combine those together, using a :py:class:`automat.TypeMachineBuilder`.
+Next we need to combine those together, using a
+:py:class:`automat.TypeMachineBuilder`.
 
 .. literalinclude:: examples/garage_door.py
    :start-after: start building
@@ -70,21 +46,48 @@ Next we have to define our states.  Let's start with four simple ones:
    :start-after: build states
    :end-before: end states
 
-To build the state machine, we define a series of transitions, using the method
-``.upon()``:
+To describe the state machine, we define a series of transitions, using the
+method ``.upon()``:
 
 .. literalinclude:: examples/garage_door.py
    :start-after: build methods
    :end-before: end methods
 
+
+
 Building and using the state machine
 ------------------------------------
 
-TKTKTK
+Now that we have described all the inputs, states, and output behaviors, it's
+time to actually build the state machine:
 
-- cover ``.build()``
-- instantiating the state machine
-- opening and closing the garage door
+.. literalinclude:: examples/garage_door.py
+   :start-after: do build
+   :end-before: end building
+
+The :py:meth:`automat.TypeMachineBuilder.build` method creates a callable that
+takes an instance of its state core (``DoorDevices``) and returns an object
+that conforms to its inputs protocol (``GarageController``).  We can then take
+this ``machineFactory`` and call it, like so:
+
+.. literalinclude:: examples/garage_door.py
+   :start-after: do instantiate
+   :end-before: end instantiate
+
+Because we defined ``closed`` as our first state above, the machine begins in
+that state by default.  So the first thing we'll do is to open the door:
+
+.. literalinclude:: examples/garage_door.py
+   :start-after: do open
+   :end-before: end open
+
+If we run this, we will then see some output, indicating that the motor is
+running:
+
+.. code-block::
+
+   motor running up
+
 
 
 Input for Inputs and Output for Outputs

@@ -39,13 +39,13 @@ class Alarm:
 
 # protocol definition
 class GarageController(typing.Protocol):
-    def push_button(self) -> None:
+    def pushButton(self) -> None:
         "Push the button to open or close the door"
 
-    def open_sensor(self) -> None:
+    def openSensor(self) -> None:
         "The 'open' sensor activated; the door is fully open."
 
-    def close_sensor(self) -> None:
+    def closeSensor(self) -> None:
         "The 'close' sensor activated; the door is fully closed."
 
 
@@ -70,41 +70,49 @@ opened = builder.state("opened")
 closing = builder.state("closing")
 # end states
 
+
 # build methods
-@closed.upon(GarageController.push_button).to(opening)
-def start_opening(controller: GarageController, devices: DoorDevices) -> None:
+@closed.upon(GarageController.pushButton).to(opening)
+def startOpening(controller: GarageController, devices: DoorDevices) -> None:
     devices.motor.up()
 
 
-@opening.upon(GarageController.open_sensor).to(opened)
-def finished_opening(controller: GarageController, devices: DoorDevices):
+@opening.upon(GarageController.openSensor).to(opened)
+def finishedOpening(controller: GarageController, devices: DoorDevices):
     devices.motor.stop()
 
 
-@opened.upon(GarageController.push_button).to(closing)
-def start_closing(controller: GarageController, devices: DoorDevices) -> None:
+@opened.upon(GarageController.pushButton).to(closing)
+def startClosing(controller: GarageController, devices: DoorDevices) -> None:
     devices.alarm.beep()
     devices.motor.down()
 
 
-@closing.upon(GarageController.close_sensor).to(closed)
-def finished_closing(controller: GarageController, devices: DoorDevices):
+@closing.upon(GarageController.closeSensor).to(closed)
+def finishedClosing(controller: GarageController, devices: DoorDevices):
     devices.motor.stop()
     # end methods
 
+
 # do build
-machine_factory = builder.build()
+machineFactory = builder.build()
 # end building
 # story
-if __name__ == '__main__':
-    machine = machine_factory(DoorDevices(Motor(), Alarm()))
-    machine.push_button()
+if __name__ == "__main__":
+    # do instantiate
+    machine = machineFactory(DoorDevices(Motor(), Alarm()))
+    # end instantiate
+    print("pushing button...")
+    # do open
+    machine.pushButton()
+    # end open
+    print("pushedW")
     try:
-        machine.push_button()
+        machine.pushButton()
     except NoTransition:
         print("this is not implemented yet")
-    machine.open_sensor()
-    machine.push_button()
-    machine.close_sensor()
+    machine.openSensor()
+    machine.pushButton()
+    machine.closeSensor()
 
 # end story

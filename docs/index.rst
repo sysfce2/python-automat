@@ -6,9 +6,9 @@ Automat: Self-service finite-state machines for the programmer on the go.
    :width: 250
    :align: right
 
-Automat is a library for concise, idiomatic Python expression
-of finite-state automata
-(particularly deterministic finite-state transducers).
+Automat is a library for concise, idiomatic Python expression of finite-state
+automata (particularly `deterministic finite-state transducers
+<https://en.wikipedia.org/wiki/Finite-state_transducer>`_).
 
 .. _Garage-Example:
 
@@ -32,17 +32,18 @@ because we could burn out the motor if we attempt to close an already-closed
 door or open an already-open door.
 
 With diligence and attention to detail, you can implement this correctly using
-a collection of attributes on an object; is_open, is_closed,
-motor_running_direction, and so on.
+a collection of attributes on an object; ``isOpen``, ``isClosed``,
+``motorRunningDirection``, and so on.
 
 However, you have to keep all these attributes consistent.  As the software
 becomes more complex - perhaps you want to add a safety sensor that prevents
 the door from closing when someone is standing under it, for example - they all
-potentially need to be updated.
+potentially need to be updated, and any invariants about their mutual
+interdependencies.
 
-Rather than adding tedious 'if' checks to every single method to make sure that
-each of these flags are exactly what you expect, you can use a state machine to
-ensure that if your code runs at all, it will be run with all the required
+Rather than adding tedious ``if`` checks to every method on your ``GarageDoor``
+to make sure that all internal state is consistent, you can use a state machine
+to ensure that if your code runs at all, it will be run with all the required
 values initialized, because they have to be called in the order you declare
 them.
 
