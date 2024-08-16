@@ -111,8 +111,12 @@ if __name__ == "__main__":
         machine.pushButton()
     except NoTransition:
         print("this is not implemented yet")
+    print("triggering open sensor, pushing button again")
+    # sensor and close
     machine.openSensor()
     machine.pushButton()
+    # end close
+    print("pushed")
     machine.closeSensor()
 
 # end story

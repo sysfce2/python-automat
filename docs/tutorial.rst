@@ -88,7 +88,50 @@ running:
 
    motor running up
 
+If we press the button again, rather than silently double-starting the motor,
+we will get an error, since we haven't yet defined a state transition for this
+state yet.  The traceback looks like this:
 
+.. code-block::
+
+    Traceback (most recent call last):
+      File "<stdin>", line 1, in <module>
+        machine.pushButton()
+      File ".../automat/_typed.py", line 419, in implementation
+        [outputs, tracer] = transitioner.transition(methodInput)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      File ".../automat/_core.py", line 196, in transition
+        outState, outputSymbols = self._automaton.outputForInput(
+                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      File ".../automat/_core.py", line 169, in outputForInput
+        raise NoTransition(state=inState, symbol=inputSymbol)
+    automat._core.NoTransition: no transition for pushButton in TypedState(name='opening')
+
+At first, this might seem like it's making more work for you.  If you don't
+want to crash the code that calls your methods, you need to provide many more
+implementations of the same method for each different state.  But, in this
+case, by causing this exception *before* running any of your code, Automat is
+protecting your internal state: although client code will get an exception, the
+*internal* state of your garage door controller will remain consistent.
+
+If you did not explicitly take a specific state into consideration while
+implementing some behavior, that behavior will never be invoked.  Therefore, it
+cannot do something potentially harmful like double-starting the motor.
+
+If we trigger the open sensor so that the door completes its transition to the
+'open' state, then push the button again, the buzzer will sound and the door
+will descend:
+
+.. literalinclude:: examples/garage_door.py
+   :start-after: sensor and close
+   :end-before: end close
+
+
+.. code-block::
+
+   motor stopped
+   beep beep beep
+   motor running down
 
 Input for Inputs and Output for Outputs
 =======================================
