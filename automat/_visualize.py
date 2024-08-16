@@ -10,7 +10,7 @@ import graphviz
 from ._core import Automaton, Input, Output, State
 from ._discover import findMachines
 from ._methodical import MethodicalMachine
-from ._typified import TypeMachine, InputProtocol, Core
+from ._typed import TypeMachine, InputProtocol, Core
 
 
 def _gvquote(s: str) -> str:

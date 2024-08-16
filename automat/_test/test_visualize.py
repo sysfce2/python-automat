@@ -10,7 +10,7 @@ from unittest import TestCase, skipIf
 from automat import TypeMachineBuilder, pep614
 
 from .._methodical import MethodicalMachine
-from .._typified import TypeMachine
+from .._typed import TypeMachine
 from .test_discover import isTwistedInstalled
 
 

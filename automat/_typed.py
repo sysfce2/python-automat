@@ -633,8 +633,8 @@ class TypeMachineBuilder(Generic[InputProtocol, Core]):
     instances of C{InputProtocol} that take an instance of C{Core}.
 
     Describe the machine with L{TypeMachineBuilder.state} L{.upon
-    <automat._typified.TypedState.upon>} L{.to
-    <automat._typified.UponFromNo.to>}, then build it with
+    <automat._typed.TypedState.upon>} L{.to
+    <automat._typed.UponFromNo.to>}, then build it with
     L{TypeMachineBuilder.build}, like so::
 
         from typing import Protocol

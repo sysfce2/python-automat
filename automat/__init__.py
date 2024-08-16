@@ -2,7 +2,7 @@
 """
 State-machines.
 """
-from ._typified import TypeMachineBuilder, pep614, AlreadyBuiltError, TypeMachine
+from ._typed import TypeMachineBuilder, pep614, AlreadyBuiltError, TypeMachine
 from ._core import NoTransition
 from ._methodical import MethodicalMachine
 

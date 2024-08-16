@@ -8,7 +8,7 @@ from twisted.python.modules import PythonAttribute, PythonModule, getModule
 
 from automat import MethodicalMachine
 
-from ._typified import TypeMachine, InputProtocol, Core
+from ._typed import TypeMachine, InputProtocol, Core
 
 
 def isOriginalLocation(attr: PythonAttribute | PythonModule) -> bool:
