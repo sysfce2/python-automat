@@ -54,7 +54,8 @@ You can read more about state machines and their advantages for Python programme
    :maxdepth: 2
    :caption: Contents:
 
-   about
+   tutorial
+   compare
    visualize
    api/index
    debugging
