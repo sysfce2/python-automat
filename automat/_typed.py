@@ -405,8 +405,7 @@ def implementMethod(
             if not returnsNone:
                 raise RuntimeError(
                     f"attempting to reentrantly run {method.__qualname__} "
-                    f"but it wants to return {returnAnnotation!r} not None "
-                    f"({returnAnnotation is None} {returnsNone})"
+                    f"but it wants to return {returnAnnotation!r} not None"
                 )
 
             def rerunme() -> None:

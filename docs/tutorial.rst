@@ -1,5 +1,12 @@
-Tutorial: Building a Garage Door Controller
-===========================================
+********
+Tutorial
+********
+
+The Basics: a Garage Door Opener
+================================
+
+Describing the State Machine
+----------------------------
 
 Let's consider :ref:`the garage door example from the
 introduction<Garage-Example>`.
@@ -52,8 +59,6 @@ method ``.upon()``:
 .. literalinclude:: examples/garage_door.py
    :start-after: build methods
    :end-before: end methods
-
-
 
 Building and using the state machine
 ------------------------------------
@@ -126,193 +131,290 @@ will descend:
    :start-after: sensor and close
    :end-before: end close
 
-
 .. code-block::
 
    motor stopped
    beep beep beep
    motor running down
 
-Input for Inputs and Output for Outputs
-=======================================
+Try these exercises to get to to know Automat a little bit better:
 
-Quite often you want to be able to pass parameters to your methods,
-as well as inspecting their results.
-For example, when you brew the coffee,
-you might expect a cup of coffee to result,
-and you would like to see what kind of coffee it is.
-And if you were to put delicious hand-roasted small-batch artisanal
-beans into the machine, you would expect a *better* cup of coffee
-than if you were to use mass-produced beans.
-You would do this in plain old Python by adding a parameter,
-so that's how you do it in Automat as well.
+- When the button is pushed while the door is opening, the motor should stop,
+  and if it's pressed again, the door should go in the reverse direction; for
+  exmaple, if it's opening, it should pause and then close again, and if it's
+  closing, it should pause and then open again.  Make it do this rather than
+  raise an exception.
+- Add a 'safety sensor' input, that refuses to close the door while it is
+  tripped.
 
+Taking, Storing, and Returning Data
+-----------------------------------
 
-.. code-block:: python
+Any method defined by the input protocol can take arguments and return values,
+just like any Python method.  In order to facilitate this, all transition
+behavior methods must be able to accept any signature that their input can.
 
-    class CoffeeBrewer(object):
-        _machine = MethodicalMachine()
+To demonstrate this, let's add a feature to our door.  Instead of a single
+button, let's add the ability to pair multiple remotes to open the door, so we
+can note which remote was used in a security log.  For starters, we will need
+to modify our ``pushButton`` method to accept a ``remoteID`` argument, which we
+can print out.
 
-        # ...
+.. literalinclude:: examples/garage_door_security.py
+   :pyobject: GarageController.pushButton
 
-        @_machine.input()
-        def put_in_beans(self, beans):
-            "The user put in some beans."
+If you're using ``mypy``, you will immediately see a type error when making
+this change, as all the calls to ``<state>.upon(GarageController.pushButton)``
+now complain something like this:
 
+.. code-block::
 
-However, one important difference here is that
-*we can't add any implementation code to the input method*.
-Inputs are purely a declaration of the interface;
-the behavior must all come from outputs.
-Therefore, the change in the state of the coffee machine
-must be represented as an output.
-We can add an output method like this:
+   garage_door_security.py:75:2: error: Argument 1 to "__call__" of "TransitionRegistrar"
+        has incompatible type "Callable[[GarageController, DoorDevices], None]";
+        expected "Callable[[GarageController, DoorDevices, str], None]"  [arg-type]
 
+The ``TransitionRegistrar`` object is the result of calling ``.to(...)``, so
+what this is saying is that your function that is decorated with, say,
+``@closed.upon(GarageController.pushButton).to(opening)``, takes your input
+protocol and your shared core object (as all transition behavior functions
+must), but does *not* take the ``str`` argument that ``pushButton`` takes.  To
+fix it, we can add that parameter everywhere, and print it out, like so:
 
-.. code-block:: python
+.. literalinclude:: examples/garage_door_security.py
+   :pyobject: startOpening
 
-    class CoffeeBrewer(object):
-        _machine = MethodicalMachine()
+Obviously, mypy will also complain that our test callers are missing the
+``remoteID`` argument as well, so if we change them to pass along some value
+like so:
 
-        # ...
+.. literalinclude:: examples/garage_door.py
+   :start-after: do open
+   :end-before: end open
 
-        @_machine.output()
-        def _save_beans(self, beans):
-            "The beans are now in the machine; save them."
-            self._beans = beans
+Then we will see it in our output:
 
+.. code-block::
 
-and then connect it to the `put_in_beans` by changing the transition from
-`dont_have_beans` to `have_beans` like so:
+   opened by alice
 
+Return values are treated in the same way as parameters.  If your input
+protocol specifies a return type, then all behavior methods must also return
+that type.  Your type checker will help ensure that these all line up for you
+as well.
 
-.. code-block:: python
+You can download the full examples here:
 
-    class CoffeeBrewer(object):
-        _machine = MethodicalMachine()
+- :download:`examples/garage_door.py`
+- :download:`examples/garage_door_security.py`
 
-        # ...
+More Advanced Usage: a Membership Card Automat Restaurant
+=========================================================
 
-        dont_have_beans.upon(put_in_beans, enter=have_beans,
-                             outputs=[_save_beans])
+Setting Up the Example
+----------------------
 
+We will have to shift to a slightly more complex example to demonstrate
+Automat's more sophisticated features.  Rather than opening the single door on
+our garage, let's implement the payment machine for an Automat - a food vending
+machine.
 
-Now, when you call:
-
-
-.. code-block:: python
-
-    coffee_machine.put_in_beans("real good beans")
-
-
-the machine will remember the beans for later.
-
-So how do we get the beans back out again?
-One of our outputs needs to have a return value.
-It would make sense if our `brew_button` method
-returned the cup of coffee that it made, so we should add an output.
-So, in addition to heating the heating element,
-let's add a return value that describes the coffee.
-First a new output:
-
-
-.. code-block:: python
-
-    class CoffeeBrewer(object):
-        _machine = MethodicalMachine()
-
-        # ...
-
-        @_machine.output()
-        def _describe_coffee(self):
-            return "A cup of coffee made with {}.".format(self._beans)
-
-
-Note that we don't need to check first whether `self._beans` exists or not,
-because we can only reach this output method if the state machine says we've
-gone through a set of states that sets this attribute.
-
-Now, we need to hook up `_describe_coffee` to the process of brewing,
-so change the brewing transition to:
-
-
-.. code-block:: python
-
-    class CoffeeBrewer(object):
-        _machine = MethodicalMachine()
-
-        # ...
-
-        have_beans.upon(brew_button, enter=dont_have_beans,
-                        outputs=[_heat_the_heating_element,
-                                 _describe_coffee])
-
-
-Now, we can call it:
-
-
->>> coffee_machine.brew_button()
-[None, 'A cup of coffee made with real good beans.']
-
-
-Except... wait a second, what's that `None` doing there?
-
-Since every input can produce multiple outputs, in automat, the default return
-value from every input invocation is a `list`.  In this case, we have both
-`_heat_the_heating_element` and `_describe_coffee` outputs, so we're seeing
-both of their return values.  However, this can be customized, with the
-`collector` argument to :py:meth:`MethodicalMachine.upon`; the `collector` is a
-callable which takes an iterable of all the outputs' return values and
-"collects" a single return value to return to the caller of the state machine.
-
-In this case, we only care about the last output,
-so we can adjust the call to :py:meth:`MethodicalMachine.upon` like this:
-
-.. code-block:: python
-
-    class CoffeeBrewer(object):
-        _machine = MethodicalMachine()
-
-        # ...
-
-        have_beans.upon(brew_button, enter=dont_have_beans,
-                        outputs=[_heat_the_heating_element,
-                                 _describe_coffee],
-                        collector=lambda iterable: list(iterable)[-1]
-        )
-
-
-And now, we'll get just the return value we want:
-
-
->>> coffee_machine.brew_button()
-'A cup of coffee made with real good beans.'
-
+Our automat operates on a membership system.  You buy an AutoBux card, load it
+up, and then once you are at the machine, you swipe your card, make a
+selection, your account is debited, and your food is dispensed.
 
 State-specific Data
 -------------------
 
-TKTKTK
+One of the coolest feature of Automat is not merely enforcing state
+transitions, but ensuring that the right data is always available in the right
+state.  For our membership-card example, will start in an "idle" state, but
+when a customer swipes their card and starts to make their food selection, we
+have now entered the "choosing" state, it is crucial that *if we are in the
+choosing state, then we* **must** *know which customer's card we will charge*.
 
-- possible garage-door example? "stuck" state for when button is pressed when
-  door is opening or closing. same behavior in either case (pause, close if
-  button not pressed after timeout) but the direction to go in and the delayed
-  call to cancel could both be stored in a Stuck SSD.  It's a bit of a reach?
+We set up the state machine in much the same way as before: a state core:
 
-OR
+.. literalinclude:: examples/automat_card.py
+   :pyobject: AutomatCore
 
-- "automat" (vending machine) example: counting up coins to buy an item;
-  state-specific data created when first coin inserted, balance tracked on SSD
-  object, change + food dispensed and return to idle state.
+And an inputs protocol:
 
-Reentrancy Limitations
-----------------------
+.. literalinclude:: examples/automat_card.py
+   :pyobject: Automat
 
-TKTKTK
+It may jump out at you that the ``_dispenseFood`` method is private.  That's a
+bit unusual for a ``Protocol``, which is usually used to describe a
+publicly-facing API.  Indeed, you might even want a *second* ``Protocol`` to
+hide this away from your public documentation.  But for Automat, this is
+important because it's what lets us implement a *conditional state transition*,
+something commonly associated with state-specific data.
 
-this one might need to be a little fake as you tend to hit these with complex
-asynchronous/semi-synchronous APIs in real life
+We will get to that in a moment, but first, let's define that data.  We'll
+begin with a function that, like transition behavior functions, takes our input
+protocol and core type.  Its job will be to build our state-specific data for
+the "choosing" state, i.e. payment details.  Entering this state requires an
+``accountID`` as supplied by our ``swipeCard`` input, so we will require that
+as a parameter as well:
 
+.. literalinclude:: examples/automat_card.py
+   :pyobject: rememberAccount
+
+Next, let's actually build the machine.  We will use ``rememberAccount`` as the
+second parameter to ``TypeMachineBuilder.state()``, which defines ``choosing``
+as a data state:
+
+.. literalinclude:: examples/automat_card.py
+   :start-after: define machine
+   :end-before: end define
+
+.. note::
+
+   Here, because swipeCard doesn't need any behavior and returns a static,
+   immutable type (None), we define the transition with ``.returns(None)``
+   rather than giving it a behavior function.  This is the same as using
+   ``@idle.upon(Automat.swipeCard).to(choosing)`` as a decorator on an empty
+   function, but a lot faster to type and to read.
+
+The fact that ``choosing`` is a data state adds two new requirements to its
+transitions:x
+
+1. First, for every transition defined *to* the ``choosing`` state, the data
+   factory function -- ``rememberAccount`` -- must be callable with whatever
+   parameters defined in the input.  If you want to make a lenient data factory
+   that supports multiple signatures, you can always add ``*args: object,
+   **kwargs: object`` to its signature, but any parameters it requires (in this
+   case, ``accountID``) *must* be present in any input protocol methods that
+   transition *to* ``choosing`` so that they can be passed along to the
+   factory.
+
+2. Second, for every transition defined *from* the ``choosing`` state, behavior
+   functions will accept an additional parameter, of the same type returned by
+   their state-specific data factory function.  In other words, we will build a
+   ``PaymentDetails`` object on every transition *to* ``choosing``, and then
+   remember and pass that object to every behavior function as long as the
+   machine remains in that state.
+
+Conditional State Transitions
+-----------------------------
+
+Formally, in a deterministic finite-state automaton, an input in one state must
+result in the same transition to the same output state.  When you define
+transitions statically, Automat adheres to this rule.  However, in many
+real-world cases, which state you end up in after a particular event depends on
+things like the input data or internal state.  In this example, if the user's
+AutoBux™ account balance is too low, then the food should not be dispensed; it
+should prompt the user to make another selection.
+
+Because it must be static, this means that the transition we will define from
+the ``choosing`` state upon ``selectFood`` will actually be a ``.loop()`` -- in
+other words, back to ``choosing`` -- rather than ``.to(idle)``.  Within the
+behavior function of that transition, if we have determined that the user's
+card has been charged properly, we will call *back* into the ``Automat``
+protocol via the ``_dispenseFood`` private input, like so:
+
+.. literalinclude:: examples/automat_card.py
+   :pyobject: selected
+
+And since we want *that* input to transition us back to ``idle`` once the food
+has been dispensed, once again, we register a static transition, and this one's
+behavior is much simpler:
+
+.. literalinclude:: examples/automat_card.py
+   :pyobject: doOpen
+
+You can download the full example here:
+
+- :download:`examples/garage_door_security.py`
+
+Reentrancy
+----------
+
+Observant readers may have noticed a slightly odd detail in the previous
+section.
+
+If our ``selected`` behavior function can cause a transition to another state
+before it's completed, but that other state's behaviors may require invariants
+that are maintained by previous behavior (i.e. ``selected`` itself) having
+completed, doesn't that create a paradox?  How can we just invoke
+``inputs._dispenseFood`` and have it work?
+
+In fact, you can't.  This is an unresolvable paradox, and automat does a little
+trick to allow this convenient illusion, but it only works in some cases.
+
+Problems that lend themselves to state machines often involve setting up state
+to generate inputs back to the state machine in the future.  For example, in
+the garage door example above, we implicitly registered sensors to call the
+``openSensor`` and ``closeSensor`` methods.  A more complete implementation in
+the behavior might need to set a timeout with an event loop, to automatically
+close the door after a certain amount of time.  Being able to treat the state
+machines inputs as regular bound methods that can be used in callbacks is
+extremely convenient for this sort of thing.  For those use cases, there are no
+particular limits on what can be called; once the behavior itself is finished
+and it's no longer on the stack, the object will behave exactly as its
+``Protocol`` describes.
+
+One constraint is that any method you invoke in this way cannot return any
+value except None.  This very simple machine, for example, that attempts to
+invoke a behavior that returns an integer:
+
+.. literalinclude:: examples/feedback_errors.py
+   :start-after: #begin
+   :end-before: #end
+
+will result in a traceback like so:
+
+.. code-block::
+
+      File "feedback_errors.py", line 24, in behave
+        print("computed:", inputs.compute())
+                           ^^^^^^^^^^^^^^^^
+      File ".../automat/_typed.py", line 406, in implementation
+        raise RuntimeError(
+    RuntimeError: attempting to reentrantly run Inputs.compute
+        but it wants to return <class 'int'> not None
+
+However, if instead of calling the method *immediately*, we save the method
+away to invoke later, it works fine once the current behavior function has
+completed:
+
+.. literalinclude:: examples/feedback_order.py
+   :start-after: begin computations
+   :end-before: end computations
+
+This simply prints ``3``, as expected.
+
+But why is there a constraint on return type?  Surely a ``None``-returning
+method with side effects depends on its internal state just as much as
+something that returns a value?  Running it re-entrantly before finishing the
+previous behavior would leave things in an invalid state, so how can it run at
+all?
+
+The magic that makes this work is that Automat automatically makes the
+invocation *not reentrant*, by re-ordering it for you.  It can *re-order a
+second behavior that returns None to run at the end of your current behavior*,
+but it cannot steal a return value from the future, so it raises an exception
+to avoid confusion.
+
+But there is still the potentially confusing edge-case of re-ordering.  A
+machine that contains these two behaviors:
+
+.. literalinclude:: examples/feedback_debugging.py
+   :pyobject: one
+.. literalinclude:: examples/feedback_debugging.py
+   :pyobject: two
+
+will, when ``.behavior1()`` is invoked on it, print like so:
+
+.. code-block::
+
+   starting behavior 1
+   ending behavior 1
+   behavior 2
+
+In general, this re-ordering *is* what you want idiomatically when working with
+a state machine, but it is important to know that it can happen.  If you have
+code that you do want to invoke side effects in a precise order, put it in a
+function or into a method on your shared core.
 
 How do I get the current state of a state machine?
 ==================================================
@@ -322,45 +424,30 @@ Don't do that.
 One major reason for having a state machine is that you want the callers of the
 state machine to just provide the appropriate input to the machine at the
 appropriate time, and *not have to check themselves* what state the machine is
-in.  So if you are tempted to write some code like this:
+in.
+
+The *whole point* of Automat is to never, ever write code that looks like this,
+and places the burden on the caller:
 
 
 .. code-block:: python
 
-    if connection_state_machine.state == "CONNECTED":
-        connection_state_machine.send_message()
+    if connectionMachine.state == "CONNECTED":
+        connectionMachine.sendMessage()
     else:
         print("not connected")
-
 
 Instead, just make your calling code do this:
 
 .. code-block:: python
 
-    connection_state_machine.send_message()
+    connectionMachine.sendMessage()
 
 and then change your state machine to look like this:
 
-
-.. code-block:: python
-
-    class Connector(Protocol):
-        def send_message(self) -> None:
-            "send a message"
-    class Core:
-        _transport: Transport
-
-    builder = TypeMachine(Connector, Core)
-    connected = builder.state("connector")
-    not_connected = builder.state("not_connected")
-    @connected.upon(Connector.send_message).loop()
-    def _actually_send_message(connector: Connector, core: Core) -> None:
-        core._transport.send(b"message")
-    @not_connected.upon(Connector.send_message).loop()
-    def _report_sending_failure(connector: Connector, core: Core):
-        print("not connected")
-    machine = builder.build()
-
+.. literalinclude:: examples/dont_get_state.py
+   :start-after: begin salient
+   :end-before: end salient
 
 so that the responsibility for knowing which state the state machine is in
 remains within the state machine itself.
@@ -369,177 +456,61 @@ remains within the state machine itself.
 If I can't get the state of the state machine, how can I save it to (a database, an API response, a file on disk...)
 ====================================================================================================================
 
-TKTKTK
+On the serialization side, you can build inputs that return a type that every
+state can respond to.  For example, here's a machine that maintains an ``int``
+value in its core, and a ``str`` value in a piece of state-specific data.  This
+really just works like implementing any other return value.
 
-- no need for ``serialized=`` because we can use the ``str`` values passed to
-  :py:meth:`TypeMachineBuilder.state`, those have to be serializable
+.. literalinclude:: examples/serialize_machine.py
+   :start-after: begin salient
+   :end-before: end salient
 
-- we can just implement serialization as a regular input, the only thing that
-  we are missing is the ability to jump to a specific state using the built
-  constructor.  so that constructor can optionally take a state argument, and
-  be ``@overload``-ed such that a ``TypedState`` requires a parameter of
-  the ``Data`` typevar type, whereas ``TypedDataState`` does not.  Then we can
-  just instantiate the transitioner with the appropriate state variable.
+getting the data out then looks like this:
 
+.. literalinclude:: examples/serialize_machine.py
+   :start-after: build and serialize
+   :end-before: end build
 
-legacy version follows:
+which produces:
 
-There are APIs for serializing the state machine.
+.. code-block::
 
-First, you have to decide on a persistent representation of each state,
-via the `serialized=` argument to the `MethodicalMachine.state()` decorator.
+   (3, None)
+   (3, DataObj(datum='hi'))
 
-Let's take this very simple "light switch" state machine,
-which can be on or off, and flipped to reverse its state:
+Future versions of automat may include some utility functionaity here to reduce
+boilerplate, but no additional features are required to address this half of
+the problem.
 
+However, for *de*serialization, we do need the ability to start in a different
+initial state.  For non-data states, it's simple enough; construct an
+appropriate shared core, and just pass the state that you want; in our case,
+``nodata``:
 
-.. code-block:: python
+.. literalinclude:: examples/serialize_machine.py
+   :pyobject: deserializeWithoutData
 
-    class LightSwitch(object):
-        _machine = MethodicalMachine()
+Finally, all we need to deserialize a state with state-specific data is to pass
+a factory function which takes ``inputs, core`` as arguments, just like
+behavior and data-factory functions.  Since we are skipping *directly* to the
+data state, we will skip the data factory declared on the state itself, and
+call this one:
 
-        @_machine.state(serialized="on")
-        def on_state(self):
-            "the switch is on"
+.. literalinclude:: examples/serialize_machine.py
+   :pyobject: deserialize
 
-        @_machine.state(serialized="off", initial=True)
-        def off_state(self):
-            "the switch is off"
+.. note::
 
-        @_machine.input()
-        def flip(self):
-            "flip the switch"
+   In this specific deserialization context, since the object isn't even really
+   constructed yet, the ``inputs`` argument is in a *totally* invalid state and
+   cannot be invoked reentrantly at all; any method will raise an exception if
+   called during the duration of this special deserialization data factory.
+   You can only use it to save it away on your state-specific data for future
+   invocations once the state machine instance is built.
 
-        on_state.upon(flip, enter=off_state, outputs=[])
-        off_state.upon(flip, enter=on_state, outputs=[])
+You can download the full example here:
 
+- :download:`examples/serialize_machine.py`
 
-In this case, we've chosen a serialized representation for each state
-via the `serialized` argument.
-The on state is represented by the string `"on"`,
-and the off state is represented by the string `"off"`.
-
-Now, let's just add an input that lets us tell if the switch is on or not.
-
-
-.. code-block:: python
-
-    from operator import itemgetter
-
-    first = itemgetter(0)
-
-    class LightSwitch(object):
-        _machine = MethodicalMachine()
-
-        # ...
-
-        @_machine.input()
-        def query_power(self):
-            "return True if powered, False otherwise"
-
-        @_machine.output()
-        def _is_powered(self):
-            return True
-
-        @_machine.output()
-        def _not_powered(self):
-            return False
-
-        on_state.upon(
-            query_power, enter=on_state, outputs=[_is_powered], collector=first
-        )
-        off_state.upon(
-            query_power, enter=off_state, outputs=[_not_powered], collector=first
-        )
-
-
-To save the state, we have the `MethodicalMachine.serializer()` method.
-A method decorated with `@serializer()` gets an extra argument injected
-at the beginning of its argument list: the serialized identifier for the state.
-In this case, either `"on"` or `"off"`.
-Since state machine output methods can also affect other state on the object,
-a serializer method is expected to return *all* relevant state for serialization.
-
-For our simple light switch, such a method might look like this:
-
-.. code-block:: python
-
-    class LightSwitch(object):
-        _machine = MethodicalMachine()
-
-        # ...
-
-        @_machine.serializer()
-        def save(self, state):
-            return {"is-it-on": state}
-
-
-Serializers can be public methods, and they can return whatever you like.
-If necessary, you can have different serializers -
-just multiple methods decorated with `@_machine.serializer()` -
-for different formats;
-return one data-structure for JSON, one for XML, one for a database row, and so on.
-
-When it comes time to unserialize, though, you generally want a private method,
-because an unserializer has to take a not-fully-initialized instance
-and populate it with state.
-It is expected to *return* the serialized machine state token
-that was passed to the serializer, but it can take whatever arguments you like.
-Of course, in order to return that,
-it probably has to take it somewhere in its arguments,
-so it will generally take whatever a paired serializer has returned as an argument.
-
-So our unserializer would look like this:
-
-
-.. code-block:: python
-
-    class LightSwitch(object):
-        _machine = MethodicalMachine()
-
-        # ...
-
-        @_machine.unserializer()
-        def _restore(self, blob):
-            return blob["is-it-on"]
-
-
-Generally you will want a classmethod deserialization constructor
-which you write yourself to call this,
-so that you know how to create an instance of your own object, like so:
-
-
-.. code-block:: python
-
-    class LightSwitch(object):
-        _machine = MethodicalMachine()
-
-        # ...
-
-        @classmethod
-        def from_blob(cls, blob):
-            self = cls()
-            self._restore(blob)
-            return self
-
-
-Saving and loading our `LightSwitch`
-along with its state-machine state can now be accomplished as follows:
-
-
->>> switch1 = LightSwitch()
->>> switch1.query_power()
-False
->>> switch1.flip()
-[]
->>> switch1.query_power()
-True
->>> blob = switch1.save()
->>> switch2 = LightSwitch.from_blob(blob)
->>> switch2.query_power()
-True
-
-
-More comprehensive (tested, working) examples are present in `docs/examples`.
-
-Go forth and machine all the state!
+And that's pretty much all you need to know in order to build type-safe state
+machines with Automat!
