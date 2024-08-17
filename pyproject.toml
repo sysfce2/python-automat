@@ -51,7 +51,7 @@ visualize=[
 automat-visualize = "automat._visualize:tool"
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
 
 [tool.setuptools_scm]
 # No configuration required, but the section needs to exist?
