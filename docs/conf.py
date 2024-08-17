@@ -42,7 +42,7 @@ extensions = [
 import pathlib
 import subprocess
 _project_root = pathlib.Path(__file__).parent.parent
-_source_root = _project_root
+_source_root = _project_root / "src"
 
 _git_reference = subprocess.run(
     ["git", "rev-parse", "--abbrev-ref", "HEAD"],
