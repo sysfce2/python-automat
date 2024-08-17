@@ -1,16 +1,21 @@
 # -*- test-case-name: automat._test.test_methodical -*-
+from __future__ import annotations
 
 import collections
+import sys
+from dataclasses import dataclass, field
 from functools import wraps
-from itertools import count
-
 from inspect import getfullargspec as getArgsSpec
+from itertools import count
+from typing import Any, Callable, Hashable, Iterable, TypeVar
 
-import attr
+if sys.version_info < (3, 10):
+    from typing_extensions import TypeAlias
+else:
+    from typing import TypeAlias
 
-from ._core import Transitioner, Automaton
+from ._core import Automaton, OutputTracer, Tracer, Transitioner
 from ._introspection import preserveName
-
 
 ArgSpec = collections.namedtuple(
     "ArgSpec",
@@ -86,34 +91,43 @@ def _keywords_only(f):
     return g
 
 
-@attr.s(frozen=True)
+@dataclass(frozen=True)
 class MethodicalState(object):
     """
     A state for a L{MethodicalMachine}.
     """
 
-    machine = attr.ib(repr=False)
-    method = attr.ib()
-    serialized = attr.ib(repr=False)
+    machine: MethodicalMachine = field(repr=False)
+    method: Callable[..., Any] = field()
+    serialized: bool = field(repr=False)
 
-    def upon(self, input, enter=None, outputs=None, collector=list):
+    def upon(
+        self,
+        input: MethodicalInput,
+        enter: MethodicalState | None = None,
+        outputs: Iterable[MethodicalOutput] | None = None,
+        collector: Callable[[Iterable[T]], object] = list,
+    ) -> None:
         """
-        Declare a state transition within the :class:`automat.MethodicalMachine`
-        associated with this :class:`automat.MethodicalState`:
-        upon the receipt of the `input`, enter the `state`,
-        emitting each output in `outputs`.
+        Declare a state transition within the L{MethodicalMachine} associated
+        with this L{MethodicalState}: upon the receipt of the `input`, enter
+        the `state`, emitting each output in `outputs`.
 
-        :param MethodicalInput input: The input triggering a state transition.
-        :param MethodicalState enter: The resulting state.
-        :param Iterable[MethodicalOutput] outputs: The outputs to be triggered
-            as a result of the declared state transition.
-        :param Callable collector: The function to be used when collecting
-            output return values.
+        @param input: The input triggering a state transition.
 
-        :raises TypeError: if any of the `outputs` signatures do not match
-            the `inputs` signature.
-        :raises ValueError: if the state transition from `self` via `input`
-            has already been defined.
+        @param enter: The resulting state.
+
+        @param outputs: The outputs to be triggered as a result of the declared
+            state transition.
+
+        @param collector: The function to be used when collecting output return
+            values.
+
+        @raises TypeError: if any of the `outputs` signatures do not match the
+            `inputs` signature.
+
+        @raises ValueError: if the state transition from `self` via `input` has
+            already been defined.
         """
         if enter is None:
             enter = self
@@ -135,11 +149,15 @@ class MethodicalState(object):
                 )
         self.machine._oneTransition(self, input, enter, outputs, collector)
 
-    def _name(self):
+    def _name(self) -> str:
         return self.method.__name__
 
 
-def _transitionerFromInstance(oself, symbol, automaton):
+def _transitionerFromInstance(
+    oself: object,
+    symbol: str,
+    automaton: Automaton[MethodicalState, MethodicalInput, MethodicalOutput],
+) -> Transitioner[MethodicalState, MethodicalInput, MethodicalOutput]:
     """
     Get a L{Transitioner}
     """
@@ -161,7 +179,7 @@ def _docstring():
     """docstring"""
 
 
-def assertNoCode(inst, attribute, f):
+def assertNoCode(f: Callable[..., Any]) -> None:
     # The function body must be empty, i.e. "pass" or "return None", which
     # both yield the same bytecode: LOAD_CONST (None), RETURN_VALUE. We also
     # accept functions with only a docstring, which yields slightly different
@@ -218,23 +236,32 @@ def _filterArgs(args, kwargs, inputSpec, outputSpec):
     return return_args, return_kwargs
 
 
-@attr.s(eq=False, hash=False)
+T = TypeVar("T")
+R = TypeVar("R")
+
+
+@dataclass(eq=False)
 class MethodicalInput(object):
     """
     An input for a L{MethodicalMachine}.
     """
 
-    automaton = attr.ib(repr=False)
-    method = attr.ib(validator=assertNoCode)
-    symbol = attr.ib(repr=False)
-    collectors = attr.ib(default=attr.Factory(dict), repr=False)
-    argSpec = attr.ib(init=False, repr=False)
+    automaton: Automaton[MethodicalState, MethodicalInput, MethodicalOutput] = field(
+        repr=False
+    )
+    method: Callable[..., Any] = field()
+    symbol: str = field(repr=False)
+    collectors: dict[MethodicalState, Callable[[Iterable[T]], R]] = field(
+        default_factory=dict, repr=False
+    )
 
-    @argSpec.default
-    def _buildArgSpec(self):
-        return _getArgSpec(self.method)
+    argSpec: ArgSpec = field(init=False, repr=False)
 
-    def __get__(self, oself, type=None):
+    def __post_init__(self) -> None:
+        self.argSpec = _getArgSpec(self.method)
+        assertNoCode(self.method)
+
+    def __get__(self, oself: object, type: None = None) -> object:
         """
         Return a function that takes no arguments and returns values returned
         by output functions produced by the given L{MethodicalInput} in
@@ -244,15 +271,15 @@ class MethodicalInput(object):
 
         @preserveName(self.method)
         @wraps(self.method)
-        def doInput(*args, **kwargs):
+        def doInput(*args: object, **kwargs: object) -> object:
             self.method(oself, *args, **kwargs)
             previousState = transitioner._state
             (outputs, outTracer) = transitioner.transition(self)
             collector = self.collectors[previousState]
             values = []
             for output in outputs:
-                if outTracer:
-                    outTracer(output._name())
+                if outTracer is not None:
+                    outTracer(output)
                 a, k = _filterArgs(args, kwargs, self.argSpec, output.argSpec)
                 value = output(oself, *a, **k)
                 values.append(value)
@@ -260,23 +287,22 @@ class MethodicalInput(object):
 
         return doInput
 
-    def _name(self):
+    def _name(self) -> str:
         return self.method.__name__
 
 
-@attr.s(frozen=True)
+@dataclass(frozen=True)
 class MethodicalOutput(object):
     """
     An output for a L{MethodicalMachine}.
     """
 
-    machine = attr.ib(repr=False)
-    method = attr.ib()
-    argSpec = attr.ib(init=False, repr=False)
+    machine: MethodicalMachine = field(repr=False)
+    method: Callable[..., Any]
+    argSpec: ArgSpec = field(init=False, repr=False, compare=False)
 
-    @argSpec.default
-    def _buildArgSpec(self):
-        return _getArgSpec(self.method)
+    def __post_init__(self) -> None:
+        self.__dict__["argSpec"] = _getArgSpec(self.method)
 
     def __get__(self, oself, type=None):
         """
@@ -295,20 +321,47 @@ class MethodicalOutput(object):
         """
         return self.method(oself, *args, **kwargs)
 
-    def _name(self):
+    def _name(self) -> str:
         return self.method.__name__
 
 
-@attr.s(eq=False, hash=False)
-class MethodicalTracer(object):
-    automaton = attr.ib(repr=False)
-    symbol = attr.ib(repr=False)
+StringOutputTracer = Callable[[str], None]
+StringTracer: TypeAlias = "Callable[[str, str, str], StringOutputTracer | None]"
 
-    def __get__(self, oself, type=None):
+
+def wrapTracer(
+    wrapped: StringTracer | None,
+) -> Tracer[MethodicalState, MethodicalInput, MethodicalOutput] | None:
+    if wrapped is None:
+        return None
+
+    def tracer(
+        state: MethodicalState,
+        input: MethodicalInput,
+        output: MethodicalState,
+    ) -> OutputTracer[MethodicalOutput] | None:
+        result = wrapped(state._name(), input._name(), output._name())
+        if result is not None:
+            return lambda out: result(out._name())
+        return None
+
+    return tracer
+
+
+@dataclass(eq=False)
+class MethodicalTracer(object):
+    automaton: Automaton[MethodicalState, MethodicalInput, MethodicalOutput] = field(
+        repr=False
+    )
+    symbol: str = field(repr=False)
+
+    def __get__(
+        self, oself: object, type: object = None
+    ) -> Callable[[StringTracer], None]:
         transitioner = _transitionerFromInstance(oself, self.symbol, self.automaton)
 
-        def setTrace(tracer):
-            transitioner.setTrace(tracer)
+        def setTrace(tracer: StringTracer | None) -> None:
+            transitioner.setTrace(wrapTracer(tracer))
 
         return setTrace
 
@@ -325,8 +378,8 @@ def gensym():
 
 class MethodicalMachine(object):
     """
-    A :class:`MethodicalMachine` is an interface to an `Automaton`
-    that uses methods on a class.
+    A L{MethodicalMachine} is an interface to an L{Automaton} that uses methods
+    on a class.
     """
 
     def __init__(self):
@@ -345,25 +398,26 @@ class MethodicalMachine(object):
         return self
 
     @_keywords_only
-    def state(self, initial=False, terminal=False, serialized=None):
+    def state(
+        self, initial: bool = False, terminal: bool = False, serialized: Hashable = None
+    ):
         """
         Declare a state, possibly an initial state or a terminal state.
 
         This is a decorator for methods, but it will modify the method so as
         not to be callable any more.
 
-        :param bool initial: is this state the initial state?
-            Only one state on this :class:`automat.MethodicalMachine`
-            may be an initial state; more than one is an error.
+        @param initial: is this state the initial state?  Only one state on
+            this L{automat.MethodicalMachine} may be an initial state; more
+            than one is an error.
 
-        :param bool terminal: Is this state a terminal state?
-            i.e. a state that the machine can end up in?
-            (This is purely informational at this point.)
+        @param terminal: Is this state a terminal state?  i.e. a state that the
+            machine can end up in?  (This is purely informational at this
+            point.)
 
-        :param Hashable serialized: a serializable value
-            to be used to represent this state to external systems.
-            This value should be hashable;
-            :py:func:`unicode` is a good type to use.
+        @param serialized: a serializable value to be used to represent this
+            state to external systems.  This value should be hashable; L{str}
+            is a good type to use.
         """
 
         def decorator(stateMethod):
@@ -468,7 +522,7 @@ class MethodicalMachine(object):
         return decorator
 
     @property
-    def _setTrace(self):
+    def _setTrace(self) -> MethodicalTracer:
         return MethodicalTracer(self._automaton, self._symbol)
 
     def asDigraph(self):

@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.10", "3.11"]
+        python: ["3.8", "3.10", "3.11"]
         TOX_ENV: ["extras", "noextras", "mypy"]
         include:
           - python: "3.11"
@@ -28,17 +28,24 @@ jobs:
         uses: actions/setup-python@v3
         with:
           python-version: ${{ matrix.python }}
+      - name: Install graphviz
+        run: |
+          sudo apt-get install -y graphviz
+          dot -V
+        if: ${{ matrix.TOX_ENV == 'extras' }}
       - name: Tox Run
         run:  |
           pip install tox;
-          TOX_ENV="py$(echo ${{ matrix.python }} | sed -e s/\.//g)-${{ matrix.TOX_ENV }}";
+          TOX_ENV="py$(echo ${{ matrix.python }} | sed -e 's/\.//g')-${{ matrix.TOX_ENV }}";
           echo "Starting: ${TOX_ENV} ${PUSH_DOCS}"
           if [[ -n "${TOX_ENV}" ]]; then
             tox -e "$TOX_ENV";
-            if [[ "${{ matrix.TOX_ENV }}" != "mypy" ]]; then
+            if [[ "${{ matrix.TOX_ENV }}" != "mypy" && "${{ matrix.TOX_ENV }}" != "lint" ]]; then
               tox -e coverage-report;
             fi;
           fi;
       - name: Upload coverage report
         if: ${{ matrix.TOX_ENV != 'mypy' }}
-        uses: codecov/codecov-action@v3.1.0
+        uses: codecov/codecov-action@v4.5.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}

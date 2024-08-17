@@ -1,8 +1,10 @@
 .tox/
-.coverage*
+.coverage.*
 .eggs/
 *.egg-info/
 *.py[co]
 build/
 dist/
 docs/_build/
+coverage.xml
+

@@ -186,26 +186,6 @@ class FindMachinesViaWrapperTests(_WritesPythonModules):
     L{twisted.python.modules.PythonAttribute}.
     """
 
-    TEST_MODULE_SOURCE = """
-    from automat import MethodicalMachine
-
-
-    class PythonClass(object):
-        _classMachine = MethodicalMachine()
-
-        class NestedClass(object):
-            _nestedClassMachine = MethodicalMachine()
-
-        ignoredAttribute = "I am ignored."
-
-        def ignoredMethod(self):
-            "I am also ignored."
-
-    rootLevelMachine = MethodicalMachine()
-    ignoredPythonObject = PythonClass()
-    anotherIgnoredPythonObject = "I am ignored."
-    """
-
     def setUp(self):
         super(FindMachinesViaWrapperTests, self).setUp()
         from .._discover import findMachinesViaWrapper
@@ -222,6 +202,31 @@ class FindMachinesViaWrapperTests(_WritesPythonModules):
         from automat import MethodicalMachine
 
         rootMachine = MethodicalMachine()
+        """
+
+        moduleDict = self.makeModuleAsDict(source, self.pathDir, "root.py")
+        rootMachine = moduleDict["root.rootMachine"]
+        self.assertIn(
+            ("root.rootMachine", rootMachine.load()),
+            list(self.findMachinesViaWrapper(rootMachine)),
+        )
+
+    def test_yieldsTypeMachine(self) -> None:
+        """
+        When given a L{twisted.python.modules.PythonAttribute} that refers
+        directly to a L{TypeMachine}, L{findMachinesViaWrapper} yields that
+        machine and its FQPN.
+        """
+        source = """\
+        from automat import TypeMachineBuilder
+        from typing import Protocol, Callable
+        class P(Protocol):
+            def method(self) -> None: ...
+        class C:...
+        def buildBuilder() -> Callable[[C], P]:
+            builder = TypeMachineBuilder(P, C)
+            return builder.build()
+        rootMachine = buildBuilder()
         """
 
         moduleDict = self.makeModuleAsDict(source, self.pathDir, "root.py")

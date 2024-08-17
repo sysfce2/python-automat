@@ -1,5 +1,16 @@
 from automat import MethodicalMachine
 
+
+class Lock(object):
+    "A sample I/O device."
+
+    def engage(self):
+        print("Locked.")
+
+    def disengage(self):
+        print("Unlocked.")
+
+
 class Turnstile(object):
     machine = MethodicalMachine()
 
@@ -38,18 +49,16 @@ class Turnstile(object):
     _unlocked.upon(arm_turned, enter=_locked, outputs=[_engage_lock])
     _locked.upon(arm_turned, enter=_locked, outputs=[_nope])
 
-class Lock(object):
-    "A sample I/O device."
-
-    def engage(self):
-        print("Locked.")
-
-    def disengage(self):
-        print("Unlocked.")
 
 turner = Turnstile(Lock())
+print("Paying fare 1.")
 turner.fare_paid()
+print("Walking through.")
 turner.arm_turned()
+print("Jumping.")
 turner.arm_turned()
+print("Paying fare 2.")
 turner.fare_paid()
+print("Walking through 2.")
 turner.arm_turned()
+print("Done.")

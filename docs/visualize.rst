@@ -1,6 +1,6 @@
-==============
-Visualizations
-==============
+================
+ Visualizations
+================
 
 
 Installation
@@ -13,74 +13,34 @@ To create state machine graphs you must install `automat` with the graphing depe
 
     pip install automat[visualize]
 
+To generate images, you will also need to install `Graphviz
+<https://graphviz.org>`_ for your platform, such as with ``brew install
+graphviz`` on macOS or ``apt install graphviz`` on Ubuntu.
+
 
 Example
 =======
 
-Given the following project structure::
-
-    mystate/
-    ├── __init__.py
-    └── machine.py
-
-
-And the following state machine defined in `machine.py`
-
-
-.. code-block:: python
-
-    from automat import MethodicalMachine
-
-    class MyMachine(object):
-        _machine = MethodicalMachine()
-
-        @_machine.state(initial=True)
-        def state_a(self):
-            """
-            State A
-            """
-
-        @_machine.state()
-        def state_b(self):
-            """
-            State B
-            """
-
-        @_machine.input()
-        def change_state(self):
-            """
-            Change state
-            """
-
-        @_machine.output()
-        def output_on_change_state(self):
-            """
-            Change state
-            """
-            return "Changing state"
-
-        state_a.upon(change_state, enter=state_b, outputs=[output_on_change_state])
-
+If we put the garage door example from the tutorial into a file called ``garage_door.py``,
 
 You can generate a state machine visualization by running:
 
 .. code-block:: bash
 
-    $ automat-visualize mystate
-    mystate.machine.MyMachine._machine ...discovered
-    mystate.machine.MyMachine._machine ...wrote image and dot into .automat_visualize
+    $ automat-visualize garage_door
+    garage_door.machineFactory ...discovered
+    garage_door.machineFactory ...wrote image and dot into .automat_visualize
+
+The `dot` file and `png` will be saved in the default output directory, to the
+file ``.automat_visualize/garage_door.machineFactory.dot.png`` .
 
 
-The `dot` file and `png` will be saved in the default output directory
-of `.automat_visualize/mystatemachine.MyMachine._machine.dot.png`
+.. image:: _static/garage_door.machineFactory.dot.png
+   :alt: garage door state machine
 
 
-.. image:: _static/mystate.machine.MyMachine._machine.dot.png
-   :alt: my state machine
-
-
-`automat-visualize` help
-========================
+``automat-visualize`` help
+==========================
 
 .. code-block:: bash
 

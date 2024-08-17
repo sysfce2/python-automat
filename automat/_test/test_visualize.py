@@ -1,14 +1,16 @@
-from __future__ import print_function
-import functools
+from __future__ import annotations
 
+import functools
 import os
 import subprocess
+from dataclasses import dataclass
+from typing import Protocol
 from unittest import TestCase, skipIf
 
-import attr
+from automat import TypeMachineBuilder, pep614
 
 from .._methodical import MethodicalMachine
-
+from .._typed import TypeMachine
 from .test_discover import isTwistedInstalled
 
 
@@ -66,6 +68,32 @@ def sampleMachine():
     return mm
 
 
+class Sample(Protocol):
+    def go(self) -> None: ...
+class Core: ...
+
+
+def sampleTypeMachine() -> TypeMachine[Sample, Core]:
+    """
+    Create a sample L{TypeMachine} with some sample states.
+    """
+    builder = TypeMachineBuilder(Sample, Core)
+    begin = builder.state("begin")
+
+    def buildit(proto: Sample, core: Core) -> int:
+        return 3  # pragma: no cover
+
+    data = builder.state("data", buildit)
+    end = builder.state("end")
+    begin.upon(Sample.go).to(data).returns(None)
+    data.upon(Sample.go).to(end).returns(None)
+
+    @pep614(end.upon(Sample.go).to(begin))
+    def out(sample: Sample, core: Core) -> None: ...
+
+    return builder.build()
+
+
 @skipIf(not isGraphvizModuleInstalled(), "Graphviz module is not installed.")
 @skipIf(not isTwistedInstalled(), "Twisted is not installed.")
 class ElementMakerTests(TestCase):
@@ -104,13 +132,13 @@ class ElementMakerTests(TestCase):
         self.assertEqual(expected, self.elementMaker("div"))
 
 
-@attr.s
+@dataclass
 class HTMLElement(object):
     """Holds an HTML element, as created by elementMaker."""
 
-    name = attr.ib()
-    children = attr.ib()
-    attributes = attr.ib()
+    name: str
+    children: list[HTMLElement]
+    attributes: dict[str, str]
 
 
 def findElements(element, predicate):
@@ -224,12 +252,14 @@ class IntegrationTests(TestCase):
     Automat.
     """
 
-    def test_validGraphviz(self):
+    def test_validGraphviz(self) -> None:
         """
-        L{graphviz} emits valid graphviz data.
+        C{graphviz} emits valid graphviz data.
         """
+        digraph = sampleMachine().asDigraph()
+        text = "".join(digraph).encode("utf-8")
         p = subprocess.Popen("dot", stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        out, err = p.communicate("".join(sampleMachine().asDigraph()).encode("utf-8"))
+        out, err = p.communicate(text)
         self.assertEqual(p.returncode, 0)
 
 
@@ -243,13 +273,25 @@ class SpotChecks(TestCase):
 
     def test_containsMachineFeatures(self):
         """
-        The output of L{graphviz} should contain the names of the states,
-        inputs, outputs in the state machine.
+        The output of L{graphviz.Digraph} should contain the names of the
+        states, inputs, outputs in the state machine.
         """
         gvout = "".join(sampleMachine().asDigraph())
         self.assertIn("begin", gvout)
         self.assertIn("end", gvout)
         self.assertIn("go", gvout)
+        self.assertIn("out", gvout)
+
+    def test_containsTypeMachineFeatures(self):
+        """
+        The output of L{graphviz.Digraph} should contain the names of the states,
+        inputs, outputs in the state machine.
+        """
+        gvout = "".join(sampleTypeMachine().asDigraph())
+        self.assertIn("begin", gvout)
+        self.assertIn("end", gvout)
+        self.assertIn("go", gvout)
+        self.assertIn("data:buildit", gvout)
         self.assertIn("out", gvout)
 
 

@@ -1,21 +1,27 @@
-from __future__ import print_function
+from __future__ import annotations
+
 import argparse
 import sys
+from functools import wraps
+from typing import Callable, Iterator
 
 import graphviz
 
+from ._core import Automaton, Input, Output, State
 from ._discover import findMachines
+from ._methodical import MethodicalMachine
+from ._typed import TypeMachine, InputProtocol, Core
 
 
-def _gvquote(s):
+def _gvquote(s: str) -> str:
     return '"{}"'.format(s.replace('"', r"\""))
 
 
-def _gvhtml(s):
+def _gvhtml(s: str) -> str:
     return "<{}>".format(s)
 
 
-def elementMaker(name, *children, **attrs):
+def elementMaker(name: str, *children: str, **attrs: str) -> str:
     """
     Construct a string from the HTML element description.
     """
@@ -29,7 +35,12 @@ def elementMaker(name, *children, **attrs):
     )
 
 
-def tableMaker(inputLabel, outputLabels, port, _E=elementMaker):
+def tableMaker(
+    inputLabel: str,
+    outputLabels: list[str],
+    port: str,
+    _E: Callable[..., str] = elementMaker,
+) -> str:
     """
     Construct an HTML table to label a state transition.
     """
@@ -42,7 +53,7 @@ def tableMaker(inputLabel, outputLabels, port, _E=elementMaker):
         _E("font", inputLabel, face="menlo-italic"),
         color="purple",
         port=port,
-        **colspan
+        **colspan,
     )
 
     pointSize = {"point-size": "9"}
@@ -59,10 +70,28 @@ def tableMaker(inputLabel, outputLabels, port, _E=elementMaker):
     return _E("table", *rows)
 
 
-def makeDigraph(automaton, inputAsString=repr, outputAsString=repr, stateAsString=repr):
+def escapify(x: Callable[[State], str]) -> Callable[[State], str]:
+    @wraps(x)
+    def impl(t: State) -> str:
+        return x(t).replace("<", "&lt;").replace(">", "&gt;")
+
+    return impl
+
+
+def makeDigraph(
+    automaton: Automaton[State, Input, Output],
+    inputAsString: Callable[[Input], str] = repr,
+    outputAsString: Callable[[Output], str] = repr,
+    stateAsString: Callable[[State], str] = repr,
+) -> graphviz.Digraph:
     """
     Produce a L{graphviz.Digraph} object from an automaton.
     """
+
+    inputAsString = escapify(inputAsString)
+    outputAsString = escapify(outputAsString)
+    stateAsString = escapify(stateAsString)
+
     digraph = graphviz.Digraph(
         graph_attr={"pack": "true", "dpi": "100"},
         node_attr={"fontname": "Menlo"},
@@ -108,12 +137,15 @@ def makeDigraph(automaton, inputAsString=repr, outputAsString=repr, stateAsStrin
 
 
 def tool(
-    _progname=sys.argv[0],
-    _argv=sys.argv[1:],
-    _syspath=sys.path,
-    _findMachines=findMachines,
-    _print=print,
-):
+    _progname: str = sys.argv[0],
+    _argv: list[str] = sys.argv[1:],
+    _syspath: list[str] = sys.path,
+    _findMachines: Callable[
+        [str],
+        Iterator[tuple[str, MethodicalMachine | TypeMachine[InputProtocol, Core]]],
+    ] = findMachines,
+    _print: Callable[..., None] = print,
+) -> None:
     """
     Entry point for command line utility.
     """
