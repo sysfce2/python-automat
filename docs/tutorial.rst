@@ -2,8 +2,18 @@
 Tutorial
 ********
 
+.. note::
+
+   Automat 24.8 is a *major* change to the public API - effectively a whole new
+   library.  For ease of migration, the code and API documentatione still
+   contains ``MethodicalMachine``, effectively the previous version of the
+   library.  However, for readability, the narrative documentation now *only*
+   documents ``TypeMachineBuilder``.  If you need documentation for that
+   earlier version, you can find it as v22.10.0 on readthedocs.
+
 The Basics: a Garage Door Opener
 ================================
+
 
 Describing the State Machine
 ----------------------------
