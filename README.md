@@ -128,7 +128,7 @@ def heatUp(inputs: CoffeeBrewer, core: BrewerCore) -> None:
     our output will be heating the heating element.
     """
     print("Brewing the coffee...")
-    self.heatingElement.turnOn()
+    core.heatingElement.turnOn()
 ```
 
 Then we finalize the state machine by building it, which gives us a callable
