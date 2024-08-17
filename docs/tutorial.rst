@@ -5,7 +5,7 @@ Tutorial
 .. note::
 
    Automat 24.8 is a *major* change to the public API - effectively a whole new
-   library.  For ease of migration, the code and API documentatione still
+   library.  For ease of migration, the code and API documentation still
    contains ``MethodicalMachine``, effectively the previous version of the
    library.  However, for readability, the narrative documentation now *only*
    documents ``TypeMachineBuilder``.  If you need documentation for that
